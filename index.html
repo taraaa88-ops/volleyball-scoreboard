@@ -489,6 +489,14 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     <p class="note">Сет считается законченным, когда набрано нужное число очков с разницей в 2. Подсказка появится сама, а завершаете сет вы кнопкой.</p>
   </details>
 
+  <section class="card" aria-label="Ссылка для того, кто считает">
+    <h2>Ссылка для помощника</h2>
+    <p class="note">Для тех, кто будет только считать счет. Они откроют простую страницу, в которой уже стоят выбранные выше команды. Им останется нажать «Начать» и считать. В конце они пришлют вам ссылку на трек игры.</p>
+    <button class="btn" id="helperBtn" type="button">Скопировать ссылку для счета</button>
+    <input id="helperLink" class="field" type="text" readonly hidden aria-label="Ссылка для помощника">
+    <p id="msgHelper" role="status" aria-live="polite" style="min-height:20px;font-size:14px;font-weight:500"></p>
+  </section>
+
   <section class="card" aria-label="Перенос матча">
     <h2>Перенос на другое устройство</h2>
     <p class="note">Считаете на телефоне, а монтируете на компьютере? Сохраните матч в файл, отправьте его себе (почта, мессенджер, облако) и загрузите на компьютере.</p>
@@ -1546,6 +1554,46 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   });
   renderArch();
 
+  /* ---------- матч по ссылке (из простой страницы) ---------- */
+  function b64uToBytes(t){ t = t.replace(/-/g,'+').replace(/_/g,'/'); while(t.length%4) t += '='; var bin = atob(t), a = new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i] = bin.charCodeAt(i); return a; }
+  async function decodeMatchHash(h){
+    var m = /^#m=([zj])\.([A-Za-z0-9_-]+)$/.exec(h || '');
+    if(!m) return null;
+    var bytes = b64uToBytes(m[2]);
+    if(m[1]==='z'){
+      var ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter(); w.write(bytes); w.close();
+      bytes = new Uint8Array(await new Response(ds.readable).arrayBuffer());
+    }
+    var o = JSON.parse(new TextDecoder().decode(bytes));
+    if(!o || !Array.isArray(o.t) || o.t.length!==2 || !Array.isArray(o.e) || o.e.length>5000 || typeof o.s!=='number') return null;
+    var wall = o.s, c = o.c || [], ev = [];
+    o.e.forEach(function(x){
+      if(!Array.isArray(x)) return;
+      wall += Number(x[2]) || 0;
+      var k = x[0]; if(['p','m','e','s'].indexOf(k)<0) return;
+      var e = {k:k, wall:wall}; if(k==='p' || k==='m') e.team = x[1]===1 ? 1 : 0;
+      ev.push(e);
+    });
+    return {app:'volleyball-scoreboard', v:1, teams:[{name:String(o.t[0])},{name:String(o.t[1])}], cfg:{bestOf:c[0], setPts:c[1], decPts:c[2]}, startedAt:o.s, events:ev, offset:0, res:1};
+  }
+  async function importFromHash(){
+    if(location.hash.indexOf('#m=')!==0) return;
+    var msg = $('msgArch');
+    try{
+      var raw = await decodeMatchHash(location.hash), m = raw && cleanFileMatch(raw);
+      try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+      if(!m){ msg.textContent = 'Не удалось открыть матч из ссылки.'; return; }
+      if(hasContent() && sameMatch(m, snapMatch())){ msg.textContent = 'Этот матч уже открыт.'; window.scrollTo(0,0); return; }
+      var ex = null; ARCH.items.forEach(function(z){ if(!ex && sameMatch(m, z.data)) ex = z; });
+      if(!ex){
+        ex = {id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), at:Date.now(), data:m};
+        ARCH.items.unshift(ex); ARCH.items = ARCH.items.slice(0,AMAX); saveArch();
+      }
+      openArch(ex.id);
+    }catch(err){ msg.textContent = 'Не удалось открыть матч из ссылки.'; }
+  }
+  setTimeout(importFromHash, 0);
+
   /* ---------- перенос матча между устройствами (файл) ---------- */
   function syncNote(t){ $('syncNote').textContent = t; }
   function schedulePush(){}
@@ -1583,6 +1631,16 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     lastScores = replay(S.events).cur.slice();
     render();
   }
+  $('helperBtn').addEventListener('click', function(){
+    var n = S.teams.map(function(t){ return String((t && t.name) || '').trim(); });
+    var u = new URL('simple.html', location.href);
+    if(n[0] && n[1] && !/^Команда [12]$/.test(n[0]) && !/^Команда [12]$/.test(n[1])){ u.searchParams.set('a', n[0]); u.searchParams.set('b', n[1]); u.searchParams.set('bo', String(S.cfg.bestOf)); }
+    var url = u.href, inp = $('helperLink');
+    inp.value = url;
+    var done = function(){ say('Ссылка скопирована. Отправьте ее тому, кто считает.','msgHelper'); };
+    var fail = function(){ inp.hidden = false; inp.focus(); inp.select(); say('Скопируйте ссылку из поля ниже.','msgHelper'); };
+    try{ navigator.clipboard.writeText(url).then(done, fail); }catch(e){ fail(); }
+  });
   syncNote('Счет хранится в этом браузере. Чтобы продолжить на другом устройстве, сохраните матч в файл (внизу страницы).');
 
   var pendingMatch = null;
