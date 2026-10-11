@@ -300,6 +300,25 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     </div>
   </section>
 
+  <section class="card" id="ngCard" aria-label="Турнир: следующая игра">
+    <button class="btn" id="ngBtn" type="button">Следующая игра турнира</button>
+    <div id="ngPanel" hidden style="display:flex;flex-direction:column;gap:10px">
+      <p class="note">Счет и сеты начнутся с нуля, а запись и время продолжатся. Названия на табло сменятся с этого момента, прошлые игры останутся как были.</p>
+      <label for="ngTeams">Команды турнира (по желанию, через запятую)</label>
+      <input id="ngTeams" class="field" type="text" maxlength="200" placeholder="Например: ПАНТЕОН, МВК, REMIX, Ника" autocomplete="off">
+      <label for="ngA">Синяя команда</label>
+      <select id="ngA" class="field"></select>
+      <input id="ngAt" class="field" type="text" maxlength="24" placeholder="Название команды" autocomplete="off" hidden>
+      <label for="ngB">Красная команда</label>
+      <select id="ngB" class="field"></select>
+      <input id="ngBt" class="field" type="text" maxlength="24" placeholder="Название команды" autocomplete="off" hidden>
+      <div class="btns">
+        <button class="btn primary" id="ngGo" type="button" disabled>Начать игру</button>
+        <button class="btn" id="ngCancel" type="button">Отмена</button>
+      </div>
+    </div>
+  </section>
+
   <section class="card" id="archCard" aria-label="Архив матчей">
     <h2>Архив матчей</h2>
     <p class="note">Две игры сразу: «Новый матч» откладывает текущий сюда, «Открыть» возвращает.</p>
@@ -575,7 +594,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   var DEF_LU = ['цб','св','до','цб','дг','до'];   // зоны 1..6: цб, св, до, цб, дг, до
   var ZORDER = [4,3,2,5,6,1];                      // порядок клеток на схеме: передняя линия сверху
   function rotLu(lu,d){ return d>0 ? [lu[1],lu[2],lu[3],lu[4],lu[5],lu[0]] : [lu[5],lu[0],lu[1],lu[2],lu[3],lu[4]]; }
-  function blank(){ return {done:[],cur:[0,0],won:[0,0],serve:null,swap:false,lu:[DEF_LU.slice(),DEF_LU.slice()],start:[DEF_LU.slice(),DEF_LU.slice()]}; }
+  function blank(){ return {names:null,done:[],cur:[0,0],won:[0,0],serve:null,swap:false,lu:[DEF_LU.slice(),DEF_LU.slice()],start:[DEF_LU.slice(),DEF_LU.slice()]}; }
   function apply(st,e){
     if(e.k==='p'){
       if(st.serve!==null && st.serve!==e.team) st.lu[e.team] = rotLu(st.lu[e.team],1);
@@ -586,6 +605,11 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     else if(e.k==='m'){ if(st.cur[e.team]>0) st.cur[e.team]--; }
     else if(e.k==='s'){ st.swap = !st.swap; }
     else if(e.k==='v'){ st.serve = e.team; }
+    else if(e.k==='g'){
+      st.names = [String(e.a||''), String(e.b||'')];
+      st.done = []; st.cur = [0,0]; st.won = [0,0]; st.serve = null; st.swap = false;
+      st.lu = [DEF_LU.slice(),DEF_LU.slice()]; st.start = [DEF_LU.slice(),DEF_LU.slice()];
+    }
     else if(e.k==='e'){
       var a=st.cur[0], b=st.cur[1];
       if(a!==b) st.won[a>b?0:1]++;
@@ -593,7 +617,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     }
   }
   function replay(ev){ var st=blank(); ev.forEach(function(e){ apply(st,e); }); return st; }
-  function snap(st){ return {done:st.done.map(function(d){return d.slice();}), cur:st.cur.slice(), won:st.won.slice(), serve:st.serve, swap:st.swap, lu:st.lu.map(function(l){return l.slice();})}; }
+  function snap(st){ return {names:st.names ? st.names.slice() : null, done:st.done.map(function(d){return d.slice();}), cur:st.cur.slice(), won:st.won.slice(), serve:st.serve, swap:st.swap, lu:st.lu.map(function(l){return l.slice();})}; }
   function need(){ return S.cfg.bestOf===0 ? Infinity : Math.ceil(S.cfg.bestOf/2); }
   function isMatchOver(st){ return st.won[0]>=need() || st.won[1]>=need(); }
   function targetFor(setNo){ return (S.cfg.bestOf>1 && setNo===S.cfg.bestOf) ? S.cfg.decPts : S.cfg.setPts; }
@@ -621,6 +645,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     if(e.k==='s') return 'Смена сторон';
     if(e.k==='l') return 'Расстановка: '+n[e.team];
     if(e.k==='r') return 'Поворот '+(e.d>0?'вперед':'назад')+': '+n[e.team];
+    if(e.k==='g') return 'Новая игра: '+e.a+' — '+e.b;
     if(e.k==='x') return e.sp===0 ? 'Пауза видео' : 'Скорость видео ×'+String(e.sp).replace('.',',');
     return 'Конец сета';
   }
@@ -644,6 +669,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     var vt = makeVt(t0);
     var off = S.offset*1000;
     var st = blank();
+    for(var gi=0; gi<S.events.length; gi++){ if(S.events[gi].k==='g'){ st.names = [String(S.events[gi].pa||''), String(S.events[gi].pb||'')]; break; } }
     var all = [{t:0, v:view(st), ev:null}];
     var last = 0;
     S.events.forEach(function(e){
@@ -663,7 +689,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   }
 
   function caption(v){
-    var n=names();
+    var n=v.names || names();
     var o = v.swap ? [1,0] : [0,1];
     var hist = v.done.map(function(d){ return d[o[0]]+':'+d[o[1]]; }).join(' · ');
     var sv = v.serve===null ? '' : '\nПодает: '+n[v.serve]+', '+v.lu[v.serve][0];
@@ -677,10 +703,10 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   }
   function csvText(all){
     var n=names();
-    var rows=[['Время видео','Миллисекунды','Событие',n[0],n[1],'Сет','Сеты','На подаче','Время на часах']];
+    var rows=[['Время видео','Миллисекунды','Событие',n[0],n[1],'Сет','Сеты','На подаче','Время на часах','Команды']];
     all.forEach(function(f){
       var w = f.ev ? clockTime(f.ev.wall) : '';
-      rows.push([hms(f.t), Math.round(f.t), f.ev?eventLabel(f.ev):'Начало', f.v.cur[0], f.v.cur[1], f.v.done.length+1, f.v.won[0]+':'+f.v.won[1], f.v.serve===null ? '' : n[f.v.serve]+' ('+f.v.lu[f.v.serve][0]+')', w]);
+      rows.push([hms(f.t), Math.round(f.t), f.ev?eventLabel(f.ev):'Начало', f.v.cur[0], f.v.cur[1], f.v.done.length+1, f.v.won[0]+':'+f.v.won[1], f.v.serve===null ? '' : (f.v.names||n)[f.v.serve]+' ('+f.v.lu[f.v.serve][0]+')', w, (f.v.names||n).join(' — ')]);
     });
     return rows.map(function(r){ return r.map(function(c){ c=String(c); return /[;"\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c; }).join(';'); }).join('\r\n');
   }
@@ -701,7 +727,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       c.drawImage(LOGO.img,(logoW-lw)/2,(H-lh)/2,lw,lh);
       c.translate(logoW,0);
     }
-    var nm = names().map(function(s){ return s.toUpperCase(); });
+    var nm = (v.names || names()).map(function(s){ return s.toUpperCase(); });
     c.textBaseline='middle';
     var order = v.swap ? [1,0] : [0,1];
     for(var r=0;r<2;r++){
@@ -910,7 +936,13 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   $('contBtn').addEventListener('click', function(){
     S.cfg.bestOf = 0; $('bestOf').value = '0'; save(); render();
   });
-  $('undoBtn').addEventListener('click', function(){ if(S.events.length){ S.events.pop(); save(); render(); buzz(); } });
+  $('undoBtn').addEventListener('click', function(){
+    if(S.events.length){
+      var last = S.events.pop();
+      if(last.k==='g'){ S.teams = [{name:String(last.pa||'')},{name:String(last.pb||'')}]; $('nameA').value = S.teams[0].name; $('nameB').value = S.teams[1].name; lastScores = [0,0]; }
+      save(); render(); buzz();
+    }
+  });
 
   $('clockBtn').addEventListener('click', function(){
     var b=$('clockBtn');
@@ -988,6 +1020,66 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   });
   document.addEventListener('click', closeLists);
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLists(); });
+
+  /* ---------- турнир: следующая игра ---------- */
+  var NG_OTHER = '__other__', NG_KEY = 'tablo-tourney';
+  function ngTourney(){ return String($('ngTeams').value||'').split(/[,;\n]/).map(function(x){ return x.trim().slice(0,24); }).filter(function(x,i,a){ return x && a.indexOf(x)===i; }).slice(0,12); }
+  function ngFill(sel, keep){
+    var tr = ngTourney(), cur = sel.value;
+    sel.textContent = '';
+    function opt(parent, v, t){ var o = document.createElement('option'); o.value = v; o.textContent = t; parent.appendChild(o); }
+    opt(sel, '', 'Выберите команду');
+    function group(label, list){ if(!list.length) return; var g = document.createElement('optgroup'); g.label = label; list.forEach(function(n){ opt(g, n, n); }); sel.appendChild(g); }
+    group('Команды турнира', tr);
+    group('Наши команды', OWN0.filter(function(n){ return tr.indexOf(n)<0; }));
+    group('Соперники', OPP0.filter(function(n){ return tr.indexOf(n)<0 && OWN0.indexOf(n)<0; }));
+    opt(sel, NG_OTHER, 'Другая команда…');
+    var want = keep!==undefined ? keep : cur;
+    var has = Array.prototype.some.call(sel.options, function(o){ return o.value===want; });
+    if(has) sel.value = want; else if(want){ sel.value = NG_OTHER; }
+  }
+  function ngName(k){ var sel = $('ng'+k); return sel.value===NG_OTHER ? $('ng'+k+'t').value.trim().slice(0,24) : sel.value; }
+  function ngRefresh(){
+    $('ngAt').hidden = $('ngA').value!==NG_OTHER; $('ngBt').hidden = $('ngB').value!==NG_OTHER;
+    var a = ngName('A'), b = ngName('B');
+    $('ngGo').disabled = !(a && b && a.toLowerCase()!==b.toLowerCase());
+  }
+  function ngOpen(){
+    try{ $('ngTeams').value = localStorage.getItem(NG_KEY) || ''; }catch(e){}
+    ngFill($('ngA'), ''); ngFill($('ngB'), '');
+    $('ngAt').value = ''; $('ngBt').value = '';
+    $('ngPanel').hidden = false; $('ngBtn').hidden = true; ngRefresh();
+    $('ngPanel').scrollIntoView({block:'nearest', behavior:'smooth'});
+  }
+  function ngClose(){ $('ngPanel').hidden = true; $('ngBtn').hidden = false; }
+  $('ngBtn').addEventListener('click', ngOpen);
+  $('ngCancel').addEventListener('click', ngClose);
+  $('ngTeams').addEventListener('input', function(){
+    try{ localStorage.setItem(NG_KEY, $('ngTeams').value); }catch(e){}
+    ngFill($('ngA')); ngFill($('ngB')); ngRefresh();
+  });
+  ['A','B'].forEach(function(k){ $('ng'+k).addEventListener('change', ngRefresh); $('ng'+k+'t').addEventListener('input', ngRefresh); });
+  var ngArm = false;
+  $('ngGo').addEventListener('click', function(){
+    var a = ngName('A'), b = ngName('B');
+    if(!a || !b) return;
+    var st = replay(S.events), b0 = $('ngGo');
+    var running = S.events.length>0 && !isMatchOver(st) && (st.cur[0]>0 || st.cur[1]>0);
+    if(running && !ngArm){
+      ngArm = true; b0.textContent = 'Игра не закончена. Точно начать новую?';
+      setTimeout(function(){ ngArm = false; b0.textContent = 'Начать игру'; }, 4000);
+      return;
+    }
+    ngArm = false; b0.textContent = 'Начать игру';
+    var prev = names();
+    if(S.events.length){
+      if(st.cur[0]!==st.cur[1]) S.events.push({k:'e', wall:Date.now()});
+      S.events.push({k:'g', a:a, b:b, pa:prev[0], pb:prev[1], wall:Date.now()});
+    }
+    S.teams = [{name:a},{name:b}];
+    $('nameA').value = a; $('nameB').value = b;
+    lastScores = [0,0]; save(); render(); buzz(); ngClose(); window.scrollTo({top:0, behavior:'smooth'});
+  });
 
   $('bestOf').value = String(S.cfg.bestOf);
   $('setPts').value = S.cfg.setPts; $('decPts').value = S.cfg.decPts;
@@ -1498,6 +1590,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       var tm = (e.team===0 || e.team===1);
       if(e.k==='e' || e.k==='s') out.push({k:e.k, wall:e.wall});
       else if(e.k==='x' && typeof e.sp==='number' && e.sp>=0 && e.sp<=8) out.push({k:'x', sp:e.sp, wall:e.wall});
+      else if(e.k==='g' && typeof e.a==='string' && typeof e.b==='string') out.push({k:'g', a:e.a.slice(0,24), b:e.b.slice(0,24), pa:String(e.pa||'').slice(0,24), pb:String(e.pb||'').slice(0,24), wall:e.wall});
       else if((e.k==='p' || e.k==='v' || e.k==='m') && tm) out.push({k:e.k, team:e.team, wall:e.wall});
       else if(e.k==='r' && tm && (e.d===1 || e.d===-1)) out.push({k:'r', team:e.team, d:e.d, wall:e.wall});
       else if(e.k==='l' && tm && Array.isArray(e.lu) && e.lu.length===6 && e.lu.every(function(r){ return ROLES.indexOf(r)>=0; })) out.push({k:'l', team:e.team, lu:e.lu.slice(), wall:e.wall});
@@ -1606,6 +1699,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       var tm = (e.team===0 || e.team===1);
       if(e.k==='e' || e.k==='s') out.push({k:e.k, wall:e.wall});
       else if(e.k==='x' && typeof e.sp==='number' && e.sp>=0 && e.sp<=8) out.push({k:'x', sp:e.sp, wall:e.wall});
+      else if(e.k==='g' && typeof e.a==='string' && typeof e.b==='string') out.push({k:'g', a:e.a.slice(0,24), b:e.b.slice(0,24), pa:String(e.pa||'').slice(0,24), pb:String(e.pb||'').slice(0,24), wall:e.wall});
       else if((e.k==='p' || e.k==='v' || e.k==='m') && tm) out.push({k:e.k, team:e.team, wall:e.wall});
       else if(e.k==='r' && tm && (e.d===1 || e.d===-1)) out.push({k:'r', team:e.team, d:e.d, wall:e.wall});
       else if(e.k==='l' && tm && Array.isArray(e.lu) && e.lu.length===6 && e.lu.every(function(r){ return ROLES.indexOf(r)>=0; })) out.push({k:'l', team:e.team, lu:e.lu.slice(), wall:e.wall});
