@@ -77,6 +77,15 @@ select:focus,input:focus{outline:3px solid var(--a);outline-offset:1px;border-co
 textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font:13px/1.3 ui-monospace,Menlo,Consolas,monospace;padding:8px;resize:none}
 .note-ok{color:var(--ok);font-weight:600;font-size:15px;min-height:22px}
 .court{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.serve{min-height:46px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);font:600 15px var(--f-body);cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:8px}
+.serve i{width:12px;height:12px;border-radius:50%;border:2px solid var(--muted)}
+.serve[aria-pressed=true]{border-color:#E9B800;background:#F6D32D;color:#0F1828}
+.serve[aria-pressed=true] i{background:#0F1828;border-color:#0F1828}
+.mcourt{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:4px;border:1px solid var(--line);border-top:3px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+.side.a .mcourt{border-top-color:var(--a)} .side.b .mcourt{border-top-color:var(--b)}
+.mcell{position:relative;display:flex;align-items:center;justify-content:center;min-height:34px;border-radius:5px;background:var(--bg);font:600 17px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+.mcell b{position:absolute;left:4px;top:2px;font:500 9px/1 var(--f-body);color:var(--muted);letter-spacing:0}
+.mcell.srv{background:#F6D32D;color:#0F1828} .mcell.srv b{color:#0F1828;opacity:.7}
 .cell{min-height:64px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;touch-action:manipulation;font-family:var(--f-display)}
 .cell small{font:500 11px var(--f-body);color:var(--muted)}
 .cell b{font:600 26px/1 var(--f-display);text-transform:uppercase}
@@ -135,13 +144,18 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
         <div class="nm" id="nmA"></div>
         <button class="tile" id="tileA" type="button"><span class="num" id="scA">0</span><span class="pl">+1 ОЧКО</span></button>
         <button class="minus" id="minA" type="button" aria-label="Убрать очко у синей команды">−1</button>
+        <button class="serve" id="srvA" type="button" aria-pressed="false"><i></i>Подача</button>
+        <div class="mcourt" id="mcA" role="img"></div>
       </div>
       <div class="side b">
         <div class="nm" id="nmB"></div>
         <button class="tile" id="tileB" type="button"><span class="num" id="scB">0</span><span class="pl">+1 ОЧКО</span></button>
         <button class="minus" id="minB" type="button" aria-label="Убрать очко у розовой команды">−1</button>
+        <button class="serve" id="srvB" type="button" aria-pressed="false"><i></i>Подача</button>
+        <div class="mcourt" id="mcB" role="img"></div>
       </div>
     </div>
+    <p class="muted" id="serveHint" style="text-align:center" hidden>Нажмите «Подача» у команды, которая подает первой: так поворот считается верно.</p>
     <div class="chips" id="chips"></div>
     <div class="banner" id="banner" hidden>
       <strong id="bannerTxt"></strong>
@@ -313,8 +327,32 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
     el.textContent = '';
     st.done.forEach(function(d,i){ var c = document.createElement('span'); c.className = 'chip'; c.textContent = 'Сет '+(i+1)+': '+d[0]+':'+d[1]; el.appendChild(c); });
   }
+  function buildMini(){
+    ['mcA','mcB'].forEach(function(id){
+      var el = $(id); el.textContent = '';
+      ZORDER.forEach(function(z){
+        var c = document.createElement('span'); c.className = 'mcell';
+        var b = document.createElement('b'); b.textContent = z;
+        var r = document.createElement('span'); c.appendChild(b); c.appendChild(r); el.appendChild(c);
+      });
+    });
+  }
+  function renderMini(st, n){
+    [0,1].forEach(function(t){
+      var el = $(t===0 ? 'mcA' : 'mcB'), lu = st.lu[t], serving = st.serve===t;
+      ZORDER.forEach(function(z,k){
+        var cell = el.children[k]; cell.lastChild.textContent = lu[z-1];
+        cell.classList.toggle('srv', z===1 && serving);
+      });
+      el.setAttribute('aria-label','Расстановка '+n[t]+': '+lu.map(function(r,i){ return 'зона '+(i+1)+' '+r; }).join(', ')+(serving ? '. Подает '+lu[0] : ''));
+      $(t===0 ? 'srvA' : 'srvB').setAttribute('aria-pressed', serving ? 'true' : 'false');
+    });
+    $('serveHint').hidden = !(st.serve===null && !matchOver(st));
+  }
+  buildMini();
   function render(){
     var st = replay(S.events), n = S.teams;
+    renderMini(st, n);
     $('nmA').textContent = n[0]; $('nmB').textContent = n[1];
     $('scA').textContent = st.cur[0]; $('scB').textContent = st.cur[1];
     $('tiles').classList.toggle('swapped', st.swap);
@@ -381,6 +419,8 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
   });
   $('tileA').addEventListener('click', function(){ push({k:'p', team:0}); });
   $('tileB').addEventListener('click', function(){ push({k:'p', team:1}); });
+  $('srvA').addEventListener('click', function(){ push({k:'v', team:0}); });
+  $('srvB').addEventListener('click', function(){ push({k:'v', team:1}); });
   $('minA').addEventListener('click', function(){ if(replay(S.events).cur[0]>0) push({k:'m', team:0}); });
   $('minB').addEventListener('click', function(){ if(replay(S.events).cur[1]>0) push({k:'m', team:1}); });
   $('endSetBtn').addEventListener('click', function(){ push({k:'e'}); });
