@@ -1425,9 +1425,16 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     });
     return '﻿'+rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(';'); }).join('\r\n')+'\r\n';
   }
+  function isTourney(){ return S.events.some(function(e){ return e.k==='g'; }); }
+  function playLabel(){ var n = S.teams.map(function(t){ return String(t.name||'').trim(); }); return isTourney() ? 'Турнир, первая игра: '+n[0]+' — '+n[1] : n[0]+' — '+n[1]; }
+  function trackFileName(){
+    var base = isTourney() ? 'turnir_'+safeName(S.teams[0].name)+'-'+safeName(S.teams[1].name) : safeName(S.teams[0].name)+'-'+safeName(S.teams[1].name);
+    return 'tablo_track_'+base+'_'+dateStamp()+'.zip';
+  }
   function trackReadme(plan){
     return [
       'ТАБЛО БЕЗ ВИДЕО',
+      playLabel(),
       '',
       'В архиве только табло (без вашего видео). Кадр: '+plan.W+' x '+plan.H+', частота '+S.rs.fps+' к/с, длина '+hms(rsLen()*1000)+'.',
       'Картинки в папке frames имеют размер видео и прозрачный фон, поэтому их не нужно двигать и масштабировать: табло стоит в углу кадра.',
@@ -1482,7 +1489,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       zip.file('README.txt', trackReadme(plan));
       say('Собираю архив…','msgTrk');
       var out = await zip.generateAsync({type:'blob'});
-      await saveFile('tablo_track_'+dateStamp()+'.zip', out, 'msgTrk');
+      await saveFile(trackFileName(), out, 'msgTrk');
     }catch(err){
       say('Не удалось собрать архив: '+((err&&err.message)||'ошибка'),'msgTrk');
     }finally{
