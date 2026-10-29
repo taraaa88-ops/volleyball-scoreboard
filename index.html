@@ -382,6 +382,12 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     <p class="note">Цвет и логотип запоминаются за названием команды и сами подставляются во все ее матчи: в табло, итоги сета, статистику и заставку.</p>
     <div class="stl" id="stlA"></div>
     <div class="stl" id="stlB"></div>
+    <h3 style="margin:14px 0 4px;font-size:16px">Составы с сайта лиги</h3>
+    <p class="note">Откройте страницу команды на сайте лиги, выделите весь текст (Ctrl+A), скопируйте и вставьте сюда. Можно вставить сразу несколько команд подряд. Состав запишется в формате «Фамилия И.».</p>
+    <textarea id="impTxt" class="field" rows="4" style="width:100%;padding:8px 10px;min-height:90px" placeholder="Вставьте сюда текст страницы команды"></textarea>
+    <input id="impName" class="field" type="text" maxlength="30" autocomplete="off" placeholder="Название команды (только если не определилось само)" style="width:100%;margin-top:6px">
+    <button class="btn" id="impBtn" type="button" style="margin-top:6px">Загрузить составы</button>
+    <p id="impMsg" role="status" aria-live="polite" style="min-height:20px;font-size:14px;font-weight:500"></p>
     <h3 style="margin:14px 0 4px;font-size:16px">Тема табло</h3>
     <div class="sw-row" id="thRow" role="group" aria-label="Тема табло">
       <button type="button" class="btn small" data-th="dark" aria-pressed="false">Тёмная</button>
@@ -1800,39 +1806,208 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     drawTickerBar(c, vw, vh);
     c.restore();
   }
-  function drawRosterCard(cv, info, W, H){
+  function rosParse(l){
+    var m = /^(\d{1,3})\s+(.+)$/.exec(l);
+    if(m) return {num:m[1], name:m[2]};
+    if(/^\d{1,3}$/.test(l)) return {num:l, name:''};
+    return {num:'', name:l};
+  }
+  function initials(n){ var w = String(n).replace(/[^A-Za-zА-Яа-яЁё\s.]/g,'').split(/[\s.]+/).filter(Boolean); return (w.length===1 ? (w[0]||'').slice(0,2) : (w[0]||'').slice(0,2)).toUpperCase(); }
+  function drawRosterCards(cv, info, W, H){
     cv.width = W; cv.height = H; applyStyle(info.names);
     var c = cv.getContext('2d'); c.clearRect(0,0,W,H); cardBg(c, W, H);
     var sc = Math.min(W/1280, H/720); c.save(); c.scale(sc, sc);
-    var vw = W/sc, vh = H/sc, cx = vw/2, top = Math.max(18, (vh-640)/2);
-    glow(c, vw*0.1, vh*0.15, 420, rgbaOf(SUM_COL[0],0.26)); glow(c, vw*0.92, vh*0.88, 480, rgbaOf(SUM_COL[1],0.26));
+    var vw = W/sc, vh = H/sc, cx = vw/2, port = vh>vw*1.1, top = port ? 70 : Math.max(16, (vh-680)/2);
+    glow(c, vw*0.08, vh*0.12, 460, rgbaOf(SUM_COL[0],0.30)); glow(c, vw*0.94, vh*0.9, 520, rgbaOf(SUM_COL[1],0.30));
+    c.fillStyle = rgbaOf(SUM_COL[1],0.14); c.beginPath(); c.moveTo(0, vh*0.84); c.lineTo(vw, vh*0.66); c.lineTo(vw, vh*0.72); c.lineTo(0, vh*0.90); c.closePath(); c.fill();
     pill(c, cx, top, 'СТАРТОВЫЙ СОСТАВ');
+    var sub = [String((S.rs && S.rs.strip) || '').trim(), String((S.rs && S.rs.sub) || '').trim()].filter(Boolean)[0] || '';
+    if(sub){ c.fillStyle = '#C9D4F5'; spc(c,4); fitText(c, sub.toUpperCase(), 500, 17, 11, vw-200); ctext(c, sub.toUpperCase(), cx, top+66); spc(c,0); }
+    var Y0 = top+(sub ? 88 : 66), tkv = ST.tkOn && tickerText(), bottom = vh-(tkv ? 66 : 24)-(port ? 40 : 0), gap = 26, pw = port ? vw-80 : (vw-80-gap)/2, hh = 66, phT = port ? (bottom-Y0-gap)/2 : bottom-Y0;
     var n = info.names.map(function(t){ return t.toUpperCase(); });
-    var cw = Math.min(560, (vw-120)/2), gap = 40;
     [0,1].forEach(function(t){
-      var x = t===0 ? cx-gap/2-cw : cx+gap/2, ls = info.teams[t];
-      teamHead(c, x, top+64, cw, 70, t, n[t]);
-      var cols = ls.length>8 ? 4 : (ls.length>4 ? 4 : Math.max(1, ls.length)), rows = Math.ceil(ls.length/Math.max(1,cols));
-      var cwid = cw/Math.max(cols, 1), d = Math.min(104, cwid-26, rows>2 ? 94 : 120);
+      var x = port ? 40 : (t===0 ? cx-gap/2-pw : cx+gap/2), ph = phT, y0 = port ? Y0+t*(phT+gap) : Y0, ls = info.teams[t];
+      // панель
+      c.save(); c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 30; c.shadowOffsetY = 10;
+      rr(c, x, y0, pw, ph, 22); c.fillStyle = 'rgba(8,16,40,0.55)'; c.fill(); c.restore();
+      rr(c, x, y0, pw, ph, 22); c.strokeStyle = 'rgba(255,255,255,0.16)'; c.lineWidth = 1.5; c.stroke();
+      // шапка команды
+      c.save(); rr(c, x, y0, pw, ph, 22); c.clip();
+      c.fillStyle = lgrad(c, x, y0, x+pw, y0+hh, PLATE[t][0], PLATE[t][1]); c.fillRect(x, y0, pw, hh);
+      c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, y0, pw, hh*0.45);
+      c.fillStyle = 'rgba(255,255,255,0.10)'; c.beginPath(); c.moveTo(x+pw-150, y0); c.lineTo(x+pw-100, y0); c.lineTo(x+pw-130, y0+hh); c.lineTo(x+pw-180, y0+hh); c.closePath(); c.fill();
+      c.restore();
+      var lg = logoOf(info.names[t]), tx = x+24;
+      if(lg){ var lb = 46, lr = Math.min(lb/lg.width, lb/lg.height); rr(c, x+14, y0+10, 46, 46, 10); c.fillStyle = '#FFFFFF'; c.fill(); c.drawImage(lg, x+14+23-lg.width*lr/2, y0+33-lg.height*lr/2, lg.width*lr, lg.height*lr); tx = x+74; }
+      c.fillStyle = '#FFFFFF'; fitText(c, n[t], 700, 34, 18, pw-(tx-x)-130); spc(c,2); ctext(c, n[t], tx, y0+hh/2+1, 'left'); spc(c,0);
+      c.font = '600 14px '+FONT; spc(c,2); c.fillStyle = 'rgba(255,255,255,0.85)'; ctext(c, ls.length+' '+(ls.length===1 ? 'ИГРОК' : (ls.length<5 ? 'ИГРОКА' : 'ИГРОКОВ')), x+pw-20, y0+hh/2+1, 'right'); spc(c,0);
+      // карточки игроков
+      var m = ls.length;
+      if(!m){ c.fillStyle = 'rgba(255,255,255,0.5)'; c.font = '500 20px '+FONT; ctext(c, 'Состав не указан', x+pw/2, y0+hh+(ph-hh)/2); return; }
+      var cols = m<=4 ? m : (m<=8 ? 4 : 5), rows = Math.ceil(m/cols), g = 12, ax = x+16, ay = y0+hh+16, aw = pw-32, ah = ph-hh-32;
+      var cw = (aw-(cols-1)*g)/cols, ch = Math.min((ah-(rows-1)*g)/rows, cw*1.4, 250), strip = Math.max(30, Math.min(40, ch*0.2));
+      var totalH = rows*ch+(rows-1)*g, oy = ay+(ah-totalH)/2;
       ls.forEach(function(pl, i){
-        var col = i%cols, row = Math.floor(i/cols), px = x+col*cwid+cwid/2, py = top+166+row*(d+54)+d/2;
-        c.save(); c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 14; c.shadowOffsetY = 5;
-        c.beginPath(); c.arc(px, py, d/2, 0, Math.PI*2); c.fillStyle = lgrad(c, px, py-d/2, px, py+d/2, PLATE[t][0], PLATE[t][1]); c.fill(); c.restore();
-        var im = phOf(pl.ph);
-        if(im){
-          c.save(); c.beginPath(); c.arc(px, py, d/2-3, 0, Math.PI*2); c.clip();
-          var r = Math.max(d/im.width, d/im.height); c.drawImage(im, px-im.width*r/2, py-im.height*r/2, im.width*r, im.height*r); c.restore();
-        } else {
-          c.fillStyle = '#FFFFFF'; c.font = '700 '+Math.round(d*0.42)+'px '+FONT;
-          var ini = /^\d{1,3}$/.test(pl.l) ? pl.l : pl.l.replace(/[^A-Za-zА-Яа-яЁё0-9]/g,'').slice(0,2).toUpperCase();
-          ctext(c, ini, px, py+1);
+        var col = i%cols, row = Math.floor(i/cols), cnt = (row===rows-1) ? (m-row*cols) : cols;
+        var ox = ax+(aw-(cnt*cw+(cnt-1)*g))/2+col*(cw+g) - (row===rows-1 ? 0 : 0);
+        var px = (row===rows-1 && cnt<cols) ? ax+(aw-(cnt*cw+(cnt-1)*g))/2+(i-row*cols)*(cw+g) : ax+col*(cw+g), py = oy+row*(ch+g), pr = rosParse(pl.l);
+        c.save(); c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 14; c.shadowOffsetY = 5; rr(c, px, py, cw, ch, 14); c.fillStyle = '#0A101E'; c.fill(); c.restore();
+        c.save(); rr(c, px, py, cw, ch, 14); c.clip();
+        var phH = ch-strip, im = phOf(pl.ph);
+        c.fillStyle = lgrad(c, px, py, px, py+phH, PLATE[t][0], PLATE[t][1]); c.fillRect(px, py, cw, phH);
+        if(im){ var r = Math.max(cw/im.width, phH/im.height); c.save(); c.beginPath(); c.rect(px, py, cw, phH); c.clip(); c.drawImage(im, px+cw/2-im.width*r/2, py+phH*0.42-im.height*r*0.42, im.width*r, im.height*r); c.restore(); }
+        else {
+          c.fillStyle = 'rgba(255,255,255,0.16)'; c.beginPath(); c.arc(px+cw/2, py+phH*0.38, cw*0.2, 0, Math.PI*2); c.fill();
+          c.beginPath(); c.ellipse(px+cw/2, py+phH*0.98, cw*0.38, phH*0.34, 0, Math.PI, 0); c.fill();
+          var big = pr.name ? initials(pr.name) : pr.num; c.fillStyle = 'rgba(255,255,255,0.92)'; c.font = '700 '+Math.round(Math.min(cw*0.42, phH*0.38))+'px '+FONT; ctext(c, big, px+cw/2, py+phH*0.5);
         }
-        c.beginPath(); c.arc(px, py, d/2-1.5, 0, Math.PI*2); c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 3; c.stroke();
-        c.fillStyle = '#FFFFFF'; fitText(c, plLabel(pl.l), 600, 22, 12, cwid-14); ctext(c, plLabel(pl.l), px, py+d/2+24);
+        var gg = c.createLinearGradient(0, py+phH*0.6, 0, py+phH); gg.addColorStop(0, 'rgba(0,0,0,0)'); gg.addColorStop(1, 'rgba(0,0,0,0.35)'); c.fillStyle = gg; c.fillRect(px, py+phH*0.6, cw, phH*0.4);
+        c.fillStyle = lgrad(c, px, py+phH, px, py+ch, '#101A36', '#0A101E'); c.fillRect(px, py+phH, cw, strip);
+        c.fillStyle = lgrad(c, px, 0, px+cw, 0, PLATE[t][0], PLATE[t][1]); c.fillRect(px, py+phH, cw, 3);
+        var nameTxt = (pr.name || (pr.num ? '№'+pr.num : pl.l)).toUpperCase();
+        c.fillStyle = '#FFFFFF'; fitText(c, nameTxt, 600, Math.round(strip*0.46), 10, cw-12); ctext(c, nameTxt, px+cw/2, py+phH+strip/2+2);
+        c.restore();
+        if(pr.num && (pr.name || im)){
+          c.save(); c.shadowColor = 'rgba(0,0,0,0.4)'; c.shadowBlur = 6; c.beginPath(); c.arc(px+19, py+19, 15, 0, Math.PI*2); c.fillStyle = lgrad(c, 0, py+4, 0, py+34, '#FFE27A', '#F2B91A'); c.fill(); c.restore();
+          c.fillStyle = '#0A101E'; c.font = '700 '+(pr.num.length>2 ? 13 : 17)+'px '+FONT; ctext(c, pr.num, px+19, py+19);
+        }
+        rr(c, px+0.75, py+0.75, cw-1.5, ch-1.5, 13.5); c.strokeStyle = 'rgba(255,255,255,0.30)'; c.lineWidth = 1.5; c.stroke();
       });
     });
     drawTickerBar(c, vw, vh);
     c.restore();
+  }
+  function rosBase(cv, info, W, H, title){
+    cv.width = W; cv.height = H; applyStyle(info.names);
+    var c = cv.getContext('2d'); c.clearRect(0,0,W,H); cardBg(c, W, H);
+    var sc = H>W*1.1 ? W/720 : Math.min(W/1280, H/720); c.save(); c.scale(sc, sc);
+    var vw = W/sc, vh = H/sc, port = vh>vw*1.1;
+    return {c:c, vw:vw, vh:vh, port:port, cx:vw/2, top: port ? 70 : Math.max(16, (vh-680)/2), tkv: !!(ST.tkOn && tickerText())};
+  }
+  function ava(c, x, y, d, pl, t, pr){
+    c.save(); c.shadowColor = 'rgba(0,0,0,0.4)'; c.shadowBlur = 8; c.shadowOffsetY = 3;
+    c.beginPath(); c.arc(x, y, d/2, 0, Math.PI*2); c.fillStyle = lgrad(c, x, y-d/2, x, y+d/2, PLATE[t][0], PLATE[t][1]); c.fill(); c.restore();
+    var im = phOf(pl.ph);
+    if(im){ c.save(); c.beginPath(); c.arc(x, y, d/2-2, 0, Math.PI*2); c.clip(); var r = Math.max(d/im.width, d/im.height); c.drawImage(im, x-im.width*r/2, y-im.height*r*0.45, im.width*r, im.height*r); c.restore(); }
+    else { c.fillStyle = '#FFFFFF'; c.font = '700 '+Math.round(d*0.40)+'px '+FONT; ctext(c, pr.name ? initials(pr.name) : pr.num, x, y+1); }
+    c.beginPath(); c.arc(x, y, d/2-1, 0, Math.PI*2); c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 2.5; c.stroke();
+  }
+  function rosTitle(c, B, txt){
+    pill(c, B.cx, B.top, txt);
+    var sub = String((S.rs && S.rs.strip) || (S.rs && S.rs.sub) || '').trim();
+    if(sub){ c.fillStyle = '#C9D4F5'; spc(c,4); fitText(c, sub.toUpperCase(), 500, 17, 11, B.vw-200); ctext(c, sub.toUpperCase(), B.cx, B.top+66); spc(c,0); }
+    return B.top+(sub ? 88 : 66);
+  }
+  // вариант 1: списки
+  function drawRosterList(cv, info, W, H){
+    var B = rosBase(cv, info, W, H), c = B.c, vw = B.vw, vh = B.vh;
+    glow(c, vw*0.08, vh*0.12, 460, rgbaOf(SUM_COL[0],0.30)); glow(c, vw*0.94, vh*0.9, 520, rgbaOf(SUM_COL[1],0.30));
+    var Y0 = rosTitle(c, B, 'СТАРТОВЫЙ СОСТАВ'), bottom = vh-(B.tkv ? 66 : 24)-(B.port ? 40 : 0), gap = 26, pw = B.port ? vw-80 : (vw-80-gap)/2, phT = B.port ? (bottom-Y0-gap)/2 : bottom-Y0, hh = 70;
+    var n = info.names.map(function(t){ return t.toUpperCase(); });
+    [0,1].forEach(function(t){
+      var x = B.port ? 40 : (t===0 ? B.cx-gap/2-pw : B.cx+gap/2), y0 = B.port ? Y0+t*(phT+gap) : Y0, ls = info.teams[t];
+      c.save(); c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 30; c.shadowOffsetY = 10; rr(c, x, y0, pw, phT, 22); c.fillStyle = 'rgba(8,16,40,0.62)'; c.fill(); c.restore();
+      c.save(); rr(c, x, y0, pw, phT, 22); c.clip();
+      c.fillStyle = lgrad(c, x, y0, x+pw, y0+hh, PLATE[t][0], PLATE[t][1]); c.fillRect(x, y0, pw, hh); c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, y0, pw, hh*0.45);
+      var m = ls.length, rowH = Math.min(58, (phT-hh-24)/Math.max(1,m)), ry = y0+hh+12;
+      ls.forEach(function(pl, i){
+        var pr = rosParse(pl.l), yy = ry+i*rowH, cyy = yy+rowH/2;
+        if(i%2===0){ c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x, yy, pw, rowH); }
+        var d = Math.min(44, rowH-8);
+        c.fillStyle = '#F2B91A'; c.font = '700 '+Math.round(Math.min(26, rowH*0.5))+'px '+FONT; ctext(c, pr.num || String(i+1), x+44, cyy, 'center');
+        ava(c, x+96, cyy, d, pl, t, pr);
+        var nm = (pr.name || (pr.num ? 'Игрок №'+pr.num : pl.l)).toUpperCase();
+        c.fillStyle = '#FFFFFF'; fitText(c, nm, 600, Math.round(Math.min(28, rowH*0.55)), 11, pw-96-d/2-40); spc(c,1); ctext(c, nm, x+96+d/2+16, cyy+1, 'left'); spc(c,0);
+      });
+      if(!m){ c.fillStyle = 'rgba(255,255,255,0.5)'; c.font = '500 20px '+FONT; ctext(c, 'Состав не указан', x+pw/2, y0+hh+(phT-hh)/2); }
+      c.restore();
+      var lg = logoOf(info.names[t]), tx = x+26;
+      if(lg){ var lb = 48, lr = Math.min(lb/lg.width, lb/lg.height); rr(c, x+14, y0+11, 48, 48, 10); c.fillStyle = '#FFFFFF'; c.fill(); c.drawImage(lg, x+14+24-lg.width*lr/2, y0+35-lg.height*lr/2, lg.width*lr, lg.height*lr); tx = x+76; }
+      c.fillStyle = '#FFFFFF'; fitText(c, n[t], 700, 34, 18, pw-(tx-x)-40); spc(c,2); ctext(c, n[t], tx, y0+hh/2+1, 'left'); spc(c,0);
+      rr(c, x, y0, pw, phT, 22); c.strokeStyle = 'rgba(255,255,255,0.16)'; c.lineWidth = 1.5; c.stroke();
+    });
+    drawTickerBar(c, vw, vh); c.restore();
+  }
+  // вариант 2: полосы как в телетрансляции
+  function drawRosterStrip(cv, info, W, H){
+    var B = rosBase(cv, info, W, H), c = B.c, vw = B.vw, vh = B.vh;
+    glow(c, vw*0.08, vh*0.12, 460, rgbaOf(SUM_COL[0],0.30)); glow(c, vw*0.94, vh*0.9, 520, rgbaOf(SUM_COL[1],0.30));
+    var Y0 = rosTitle(c, B, 'СТАРТОВЫЙ СОСТАВ'), bottom = vh-(B.tkv ? 66 : 24)-(B.port ? 40 : 0), gap = 22, bh = (bottom-Y0-gap)/2, mx = 36;
+    var n = info.names.map(function(t){ return t.toUpperCase(); });
+    [0,1].forEach(function(t){
+      var y = Y0+t*(bh+gap), ls = info.teams[t], hw = B.port ? 0 : 230, hhh = B.port ? 64 : bh;
+      c.save(); c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 26; c.shadowOffsetY = 8; rr(c, mx, y, vw-2*mx, bh, 20); c.fillStyle = 'rgba(8,16,40,0.6)'; c.fill(); c.restore();
+      c.save(); rr(c, mx, y, vw-2*mx, bh, 20); c.clip();
+      // плашка команды
+      c.beginPath(); if(B.port){ c.rect(mx, y, vw-2*mx, hhh); } else { c.moveTo(mx, y); c.lineTo(mx+hw, y); c.lineTo(mx+hw-34, y+bh); c.lineTo(mx, y+bh); c.closePath(); }
+      c.fillStyle = lgrad(c, mx, y, mx, y+bh, PLATE[t][0], PLATE[t][1]); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.12)'; if(!B.port) c.fillRect(mx, y, hw-17, bh*0.4); else c.fillRect(mx, y, vw-2*mx, hhh*0.45);
+      c.restore();
+      var lg = logoOf(info.names[t]);
+      if(B.port){
+        c.fillStyle = '#FFFFFF'; fitText(c, n[t], 700, 34, 18, vw-2*mx-120); spc(c,2); ctext(c, n[t], mx+24, y+hhh/2+1, 'left'); spc(c,0);
+      } else {
+        var cyL = y+bh/2-(lg ? 22 : 0);
+        if(lg){ var lb = 64, lr = Math.min(lb/lg.width, lb/lg.height); rr(c, mx+hw/2-44, y+bh/2-62, 64+24, 64+24, 14); c.fillStyle = '#FFFFFF'; c.fill(); c.drawImage(lg, mx+hw/2-44+44-lg.width*lr/2, y+bh/2-62+44-lg.height*lr/2, lg.width*lr, lg.height*lr); cyL = y+bh/2+58; }
+        c.fillStyle = '#FFFFFF'; fitText(c, n[t], 700, 38, 16, hw-70); spc(c,2); ctext(c, n[t], mx+hw/2-14, cyL, 'center'); spc(c,0);
+      }
+      // игроки
+      var m = ls.length, ax = B.port ? mx+16 : mx+hw+20, aw = vw-mx-16-ax, ay = B.port ? y+hhh+10 : y+10, ah = bh-(B.port ? hhh+20 : 20);
+      if(!m){ c.fillStyle = 'rgba(255,255,255,0.5)'; c.font = '500 20px '+FONT; ctext(c, 'Состав не указан', ax+aw/2, ay+ah/2); return; }
+      var perRow = B.port ? Math.ceil(m/2) : m, rowsN = Math.ceil(m/perRow), cell = aw/perRow, d = Math.min(cell-14, (ah/rowsN)-44, 104);
+      ls.forEach(function(pl, i){
+        var col = i%perRow, row = Math.floor(i/perRow), px = ax+col*cell+cell/2, pyc = ay+(ah/rowsN)*row+(ah/rowsN-d-30)/2+d/2, pr = rosParse(pl.l);
+        ava(c, px, pyc, d, pl, t, pr);
+        if(pr.num && (pr.name || phOf(pl.ph))){ c.beginPath(); c.arc(px-d/2+6, pyc-d/2+8, 13, 0, Math.PI*2); c.fillStyle = lgrad(c, 0, pyc-d/2-5, 0, pyc-d/2+21, '#FFE27A', '#F2B91A'); c.fill(); c.fillStyle = '#0A101E'; c.font = '700 14px '+FONT; ctext(c, pr.num, px-d/2+6, pyc-d/2+8); }
+        var nm = (pr.name || (pr.num ? '№'+pr.num : pl.l)).toUpperCase();
+        c.fillStyle = '#FFFFFF'; fitText(c, nm, 600, 17, 9, cell-6); ctext(c, nm, px, pyc+d/2+19);
+      });
+    });
+    drawTickerBar(c, vw, vh); c.restore();
+  }
+  // вариант 3: разделённый экран
+  function drawRosterSplit(cv, info, W, H){
+    var B = rosBase(cv, info, W, H), c = B.c, vw = B.vw, vh = B.vh, n = info.names.map(function(t){ return t.toUpperCase(); });
+    // половины
+    var cut = 90;
+    c.save(); c.beginPath(); if(B.port){ c.moveTo(0,0); c.lineTo(vw,0); c.lineTo(vw,vh/2+cut/2); c.lineTo(0,vh/2-cut/2); } else { c.moveTo(0,0); c.lineTo(vw/2+cut/2,0); c.lineTo(vw/2-cut/2,vh); c.lineTo(0,vh); } c.closePath();
+    c.fillStyle = lgrad(c, 0, 0, B.port ? 0 : vw/2, B.port ? vh/2 : vh, mixHex(TEAM_COL[0],0,0.15), mixHex(TEAM_COL[0],0,0.7)); c.fill(); c.restore();
+    c.save(); c.beginPath(); if(B.port){ c.moveTo(0,vh/2-cut/2); c.lineTo(vw,vh/2+cut/2); c.lineTo(vw,vh); c.lineTo(0,vh); } else { c.moveTo(vw/2+cut/2,0); c.lineTo(vw,0); c.lineTo(vw,vh); c.lineTo(vw/2-cut/2,vh); } c.closePath();
+    c.fillStyle = lgrad(c, B.port ? 0 : vw/2, B.port ? vh/2 : 0, vw, vh, mixHex(TEAM_COL[1],0,0.15), mixHex(TEAM_COL[1],0,0.7)); c.fill(); c.restore();
+    c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 3; c.beginPath(); if(B.port){ c.moveTo(0,vh/2-cut/2); c.lineTo(vw,vh/2+cut/2); } else { c.moveTo(vw/2+cut/2,0); c.lineTo(vw/2-cut/2,vh); } c.stroke();
+    var Yt = B.top; pill(c, B.cx, Yt, 'СТАРТОВЫЙ СОСТАВ');
+    var sub = String((S.rs && S.rs.strip) || (S.rs && S.rs.sub) || '').trim();
+    if(sub){ c.fillStyle = '#E4EAFB'; spc(c,4); fitText(c, sub.toUpperCase(), 500, 17, 11, vw-200); ctext(c, sub.toUpperCase(), B.cx, Yt+66); spc(c,0); }
+    var Y0 = Yt+(sub ? 100 : 80), bottom = vh-(B.tkv ? 66 : 28)-(B.port ? 20 : 0);
+    var VS = B.port ? 0 : 1;
+    [0,1].forEach(function(t){
+      var ls = info.teams[t], zx = B.port ? 50 : (t===0 ? 50 : vw/2+cut/2+14), zw = B.port ? vw-100 : vw/2-cut/2-64, zy = B.port ? (t===0 ? Y0 : vh/2+cut/2+30) : Y0, zh = B.port ? vh/2-cut/2-30-(t===0 ? Y0 : 0)-(t===1 ? (vh-bottom) : 0) : bottom-Y0;
+      var right = !B.port && t===1;
+      // название
+      c.fillStyle = '#FFFFFF'; fitText(c, n[t], 700, 56, 22, zw-(logoOf(info.names[t]) ? 76 : 0)); spc(c,2);
+      var lg = logoOf(info.names[t]), nx = right ? zx+zw : zx;
+      if(lg){ var lb = 56, lr = Math.min(lb/lg.width, lb/lg.height), lx = right ? zx+zw-56 : zx; rr(c, lx, zy-2, 56, 56, 12); c.fillStyle = '#FFFFFF'; c.fill(); c.drawImage(lg, lx+28-lg.width*lr/2, zy+26-lg.height*lr/2, lg.width*lr, lg.height*lr); }
+      c.fillStyle = '#FFFFFF'; fitText(c, n[t], 700, 56, 22, zw-(lg ? 76 : 0)); spc(c,2);
+      ctext(c, n[t], right ? zx+zw-(lg ? 70 : 0) : zx+(lg ? 70 : 0), zy+26, right ? 'right' : 'left'); spc(c,0);
+      var m = ls.length, ly0 = zy+80, rowH = Math.min(46, (zh-80)/Math.max(1,m));
+      ls.forEach(function(pl, i){
+        var pr = rosParse(pl.l), cyy = ly0+i*rowH+rowH/2, d = Math.min(38, rowH-6), im = phOf(pl.ph);
+        var num = pr.num || String(i+1), nm = (pr.name || (pr.num ? 'Игрок №'+pr.num : pl.l)).toUpperCase();
+        var numX = right ? zx+zw-30 : zx+30, avX = right ? zx+zw-90 : zx+90, txX = right ? zx+zw-90-d/2-14 : zx+90+d/2+14;
+        c.fillStyle = 'rgba(255,255,255,0.35)'; c.font = '700 '+Math.round(rowH*0.62)+'px '+FONT; ctext(c, num, numX, cyy, 'center');
+        ava(c, avX, cyy, d, pl, t, pr);
+        c.fillStyle = '#FFFFFF'; fitText(c, nm, 600, Math.round(Math.min(30, rowH*0.62)), 11, zw-130); spc(c,1); ctext(c, nm, txX, cyy+1, right ? 'right' : 'left'); spc(c,0);
+        c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(zx, ly0+(i+1)*rowH-0.5, zw, 1);
+      });
+      if(!m){ c.fillStyle = 'rgba(255,255,255,0.6)'; c.font = '500 20px '+FONT; ctext(c, 'Состав не указан', zx+zw/2, zy+zh/2); }
+    });
+    c.save(); c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 18; c.beginPath(); c.arc(B.cx, B.port ? vh/2 : vh/2, 38, 0, Math.PI*2); c.fillStyle = '#FFFFFF'; c.fill(); c.restore();
+    c.fillStyle = '#17306E'; c.font = '700 26px '+FONT; ctext(c, 'VS', B.cx, vh/2+1);
+    drawTickerBar(c, vw, vh); c.restore();
+  }
+  function drawRosterCard(cv, info, W, H){
+    var f = {list:drawRosterList, strip:drawRosterStrip, split:drawRosterSplit, cards:drawRosterCards}[(window.__rosStyle || ST.rosStyle || 'split')] || drawRosterSplit;
+    return f(cv, info, W, H);
   }
   function ctaIcon(c, kind, x, y){
     c.save(); c.translate(x, y); c.fillStyle = '#0A101E'; c.strokeStyle = '#0A101E'; c.lineWidth = 2.2; c.lineJoin = 'round';
@@ -2293,6 +2468,34 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   });
   /* ---------- оформление команд: интерфейс ---------- */
   var PRESET = ['#2B4BA0','#F0407F','#1F9D6B','#E67E22','#7B3FC4','#C0392B','#0E9AA7','#555F73'];
+  function leagueParse(text, fb){
+    var lines = String(text||'').replace(/́/g,'').split(/\r?\n/).map(function(l){ return l.replace(/\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/\s+/g,' ').trim(); }).filter(Boolean);
+    var heads = [], plr = [], i;
+    for(i=0;i<lines.length;i++){
+      var l = lines[i], nx = lines[i+1] || '';
+      if(/^Год рождения/i.test(nx) && !/^Год рождения/i.test(l) && l.indexOf(':')<0 && l.length<=60) plr.push({i:i, n:l});
+      else if(/^\(/.test(nx) && l.indexOf(':')<0 && l.length<=40 && !/^\(/.test(l) && /fair play|Капитан команды/i.test(lines.slice(i+1,i+8).join(' '))) heads.push({i:i, n:l});
+    }
+    var groups = {}, order = [], unnamed = 0;
+    plr.forEach(function(p){
+      var h = ''; heads.forEach(function(x){ if(x.i<p.i) h = x.n; });
+      if(!h) h = String(fb||'').trim();
+      if(!h){ unnamed++; return; }
+      if(!groups.hasOwnProperty(h)){ groups[h] = []; order.push(h); }
+      groups[h].push(p.n);
+    });
+    function fit(sur, rest){ var mx = 16-rest.length; if(sur.length>mx) sur = sur.slice(0, Math.max(1,mx-1))+'…'; return sur+rest; }
+    var teams = order.map(function(name){
+      var ps = groups[name].map(function(n){ var w = n.split(' '); return {s:w[0], f:w[1]||''}; }), cnt = {};
+      ps.forEach(function(p){ var b = (p.s+' '+(p.f ? p.f.charAt(0) : '')).toLowerCase(); cnt[b] = (cnt[b]||0)+1; });
+      var labels = []; ps.forEach(function(p){
+        var b = (p.s+' '+(p.f ? p.f.charAt(0) : '')).toLowerCase(), lab = !p.f ? fit(p.s,'') : (cnt[b]>1 ? fit(p.s,' '+p.f) : fit(p.s,' '+p.f.charAt(0).toUpperCase()+'.'));
+        if(labels.indexOf(lab)<0) labels.push(lab);
+      });
+      return {name:name, labels:labels.slice(0,14)};
+    });
+    return {teams:teams, unnamed:unnamed};
+  }
   function stEnsure(n){ var k = stKey(n); if(!k) return null; if(!ST.teams.hasOwnProperty(k)) ST.teams[k] = {}; return ST.teams[k]; }
   function buildStl(i){
     var box = $(i===0 ? 'stlA' : 'stlB'); box.textContent = '';
@@ -2316,8 +2519,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     rm.addEventListener('click', function(){ var k = stKey(names()[i]); if(k){ delete ST.teams[k]; delete LOGOS[k]; stSave(); render(); } });
     r2.appendChild(up); r2.appendChild(fi); r2.appendChild(rm); box.appendChild(r2);
     var rl = document.createElement('label'); rl.className = 'lab'; rl.htmlFor = 'stRos'+i; rl.textContent = 'Состав: номера или имена через запятую (для карточки «Стартовый состав»)'; rl.style.marginTop = '8px'; box.appendChild(rl);
-    var ri = document.createElement('input'); ri.type = 'text'; ri.id = 'stRos'+i; ri.className = 'field'; ri.maxLength = 200; ri.autocomplete = 'off'; ri.placeholder = '7, 9, 11, 14, 3, 5';
-    ri.addEventListener('input', function(){ var t = stEnsure(names()[i]); if(!t) return; t.ros = ri.value.slice(0,200); stSave(); renderPh(i); });
+    var ri = document.createElement('input'); ri.type = 'text'; ri.id = 'stRos'+i; ri.className = 'field'; ri.maxLength = 260; ri.autocomplete = 'off'; ri.placeholder = '7, 9, 11, 14, 3, 5';
+    ri.addEventListener('input', function(){ var t = stEnsure(names()[i]); if(!t) return; t.ros = ri.value.slice(0,260); stSave(); renderPh(i); });
     box.appendChild(ri);
     var pb = document.createElement('div'); pb.id = 'stPh'+i; pb.className = 'sw-row'; pb.style.marginTop = '6px'; box.appendChild(pb);
   }
@@ -2379,6 +2582,13 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     });
   }
   buildStl(0); buildStl(1);
+  $('impBtn').addEventListener('click', function(){
+    var r = leagueParse($('impTxt').value, $('impName').value);
+    if(!r.teams.length){ say(r.unnamed ? 'Игроков нашёл ('+r.unnamed+'), но не нашёл название команды: впишите его в поле ниже.' : 'Не нашёл игроков. Скопируйте страницу команды целиком вместе с названием вверху.', 'impMsg'); return; }
+    r.teams.forEach(function(t){ var k = stEnsure(t.name); if(!k) return; k.ros = t.labels.join(', ').slice(0,260); try{ localStorage.setItem('tablo-roster-'+stKey(t.name), k.ros); }catch(e){} });
+    stSave(); $('impTxt').value = ''; render();
+    say('Записано: '+r.teams.map(function(t){ return t.name+' ('+t.labels.length+')'; }).join(', ')+(r.unnamed ? '. Без названия осталось игроков: '+r.unnamed : '')+'.', 'impMsg');
+  });
   function thSync(){ Array.prototype.forEach.call($('thRow').querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed', b.dataset.th===ST.theme ? 'true' : 'false'); }); }
   Array.prototype.forEach.call($('thRow').querySelectorAll('button'), function(b){ b.addEventListener('click', function(){ ST.theme = b.dataset.th; stSave(); thSync(); render(); }); });
   thSync();

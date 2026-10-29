@@ -154,9 +154,15 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
       <summary>Игроки (по желанию)</summary>
       <p class="muted">Номера или имена через запятую. После каждого очка появится строка «Кто забил?», в итоге будет статистика игроков и MVP.</p>
       <label class="lab" for="rosA" id="rosAL"></label>
-      <input type="text" id="rosA" maxlength="240" placeholder="7, 9, 11, 14, 3, 5, 1" autocomplete="off">
+      <input type="text" id="rosA" maxlength="300" placeholder="7, 9, 11, 14, 3, 5, 1" autocomplete="off">
       <label class="lab" for="rosB" id="rosBL"></label>
-      <input type="text" id="rosB" maxlength="240" placeholder="2, 4, 6, 8, 10, 12" autocomplete="off">
+      <input type="text" id="rosB" maxlength="300" placeholder="2, 4, 6, 8, 10, 12" autocomplete="off">
+      <label class="lab" for="impTxt">Загрузить составы с сайта лиги</label>
+      <p class="muted">Откройте страницу команды, выделите весь текст, скопируйте и вставьте сюда. Можно сразу несколько команд.</p>
+      <textarea id="impTxt" rows="3" placeholder="Вставьте текст страницы команды" style="width:100%;font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#ccd)"></textarea>
+      <input type="text" id="impName" maxlength="30" placeholder="Название команды (если не определилось само)" autocomplete="off">
+      <button class="btn" id="impBtn" type="button">Загрузить составы</button>
+      <p class="muted" id="impMsg" role="status" aria-live="polite"></p>
     </details>
     <button class="big green" id="startBtn" type="button">Начать матч</button>
     <p class="muted">Нажмите «Начать» в тот момент, когда включится запись видео. От этой кнопки считается время каждого очка.</p>
@@ -328,7 +334,36 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
   }
   var HOWS = [['atk','Атака'],['blk','Блок'],['ace','Эйс'],['err','Ошибка соперника']];
   function parseRost(t){ var out = [], seen = {}; String(t||'').split(/[,;\n]+/).forEach(function(x){ x = x.trim().slice(0,12); if(x && !seen[x] && out.length<16){ seen[x] = 1; out.push(x); } }); return out; }
+  function leagueParse(text, fb){
+    var lines = String(text||'').replace(/́/g,'').split(/\r?\n/).map(function(l){ return l.replace(/\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/\s+/g,' ').trim(); }).filter(Boolean);
+    var heads = [], plr = [], i;
+    for(i=0;i<lines.length;i++){
+      var l = lines[i], nx = lines[i+1] || '';
+      if(/^Год рождения/i.test(nx) && !/^Год рождения/i.test(l) && l.indexOf(':')<0 && l.length<=60) plr.push({i:i, n:l});
+      else if(/^\(/.test(nx) && l.indexOf(':')<0 && l.length<=40 && !/^\(/.test(l) && /fair play|Капитан команды/i.test(lines.slice(i+1,i+8).join(' '))) heads.push({i:i, n:l});
+    }
+    var groups = {}, order = [], unnamed = 0;
+    plr.forEach(function(p){
+      var h = ''; heads.forEach(function(x){ if(x.i<p.i) h = x.n; });
+      if(!h) h = String(fb||'').trim();
+      if(!h){ unnamed++; return; }
+      if(!groups.hasOwnProperty(h)){ groups[h] = []; order.push(h); }
+      groups[h].push(p.n);
+    });
+    function fit(sur, rest){ var mx = 16-rest.length; if(sur.length>mx) sur = sur.slice(0, Math.max(1,mx-1))+'…'; return sur+rest; }
+    var teams = order.map(function(name){
+      var ps = groups[name].map(function(n){ var w = n.split(' '); return {s:w[0], f:w[1]||''}; }), cnt = {};
+      ps.forEach(function(p){ var b = (p.s+' '+(p.f ? p.f.charAt(0) : '')).toLowerCase(); cnt[b] = (cnt[b]||0)+1; });
+      var labels = []; ps.forEach(function(p){
+        var b = (p.s+' '+(p.f ? p.f.charAt(0) : '')).toLowerCase(), lab = !p.f ? fit(p.s,'') : (cnt[b]>1 ? fit(p.s,' '+p.f) : fit(p.s,' '+p.f.charAt(0).toUpperCase()+'.'));
+        if(labels.indexOf(lab)<0) labels.push(lab);
+      });
+      return {name:name, labels:labels.slice(0,14)};
+    });
+    return {teams:teams, unnamed:unnamed};
+  }
   function rostKey(n){ return 'tablo-roster-'+String(n).toLowerCase(); }
+  function mergeStyleRost(n, t){ try{ var st = JSON.parse(localStorage.getItem('tablo-style-v1') || 'null') || {}; if(!st.teams || typeof st.teams!=='object') st.teams = {}; var k = String(n).trim().toLowerCase(); if(!st.teams[k]) st.teams[k] = {}; st.teams[k].ros = t.slice(0,260); localStorage.setItem('tablo-style-v1', JSON.stringify(st)); }catch(e){} }
   function loadRost(n){ try{ return String(localStorage.getItem(rostKey(n))||''); }catch(e){ return ''; } }
   function saveRost(n, t){ try{ localStorage.setItem(rostKey(n), t); }catch(e){} }
   function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} cloudSchedule(); }
@@ -396,6 +431,16 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
   function push(e){ e.wall = Date.now(); S.events.push(e); save(); render(); buzz(); }
 
   /* ---------- экраны ---------- */
+  function importRost(){
+    var r = leagueParse($('impTxt').value, $('impName').value), msg = $('impMsg');
+    if(!r.teams.length){ msg.textContent = r.unnamed ? 'Игроков нашёл ('+r.unnamed+'), но не нашёл название команды: впишите его в поле выше.' : 'Не нашёл игроков. Скопируйте страницу команды целиком вместе с названием вверху.'; return; }
+    r.teams.forEach(function(t){
+      var txt = t.labels.join(', '); saveRost(t.name, txt); mergeStyleRost(t.name, txt);
+      if(S && S.teams){ [0,1].forEach(function(i){ if(String(S.teams[i]||'').trim().toLowerCase()===t.name.trim().toLowerCase()) $(i===0 ? 'rosA' : 'rosB').value = txt; }); }
+    });
+    $('impTxt').value = '';
+    msg.textContent = 'Записано: '+r.teams.map(function(t){ return t.name+' ('+t.labels.length+')'; }).join(', ')+(r.unnamed ? '. Без названия осталось игроков: '+r.unnamed : '')+'.';
+  }
   function show(id){ ['vSetup','vReady','vGame','vLineup','vDone'].forEach(function(v){ $(v).hidden = v!==id; }); window.scrollTo(0,0); }
   function fmtText(bo){ return bo===5 ? 'До 3 побед (5 сетов)' : bo===3 ? 'До 2 побед (3 сета)' : bo===1 ? 'Один сет' : 'Товарищеский, без ограничения'; }
   function showReady(teams, bo, saved){
@@ -614,6 +659,7 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
     showReady([a,b], parseInt($('selBo').value,10), null);
   });
   $('changeBtn').addEventListener('click', function(){ initSetup({a:S.teams[0], b:S.teams[1], bo:S.bo}); show('vSetup'); });
+  $('impBtn').addEventListener('click', importRost);
   $('startBtn').addEventListener('click', function(){
     S.startedAt = Date.now(); S.events = []; S.finished = false;
     saveRost(S.teams[0], $('rosA').value); saveRost(S.teams[1], $('rosB').value); S.rost = [parseRost($('rosA').value), parseRost($('rosB').value)]; save(); show('vGame'); render(); buzz(); keepAwake();
