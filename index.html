@@ -1888,7 +1888,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     c.save(); c.shadowColor = 'rgba(0,0,0,0.4)'; c.shadowBlur = 8; c.shadowOffsetY = 3;
     c.beginPath(); c.arc(x, y, d/2, 0, Math.PI*2); c.fillStyle = lgrad(c, x, y-d/2, x, y+d/2, PLATE[t][0], PLATE[t][1]); c.fill(); c.restore();
     var im = phOf(pl.ph);
-    if(im){ c.save(); c.beginPath(); c.arc(x, y, d/2-2, 0, Math.PI*2); c.clip(); var r = Math.max(d/im.width, d/im.height); c.drawImage(im, x-im.width*r/2, y-im.height*r*0.45, im.width*r, im.height*r); c.restore(); }
+    if(im){ c.save(); c.beginPath(); c.arc(x, y, d/2-2, 0, Math.PI*2); c.clip(); var r = Math.max(d/im.width, d/im.height), iw = im.width*r, ih = im.height*r, tp = y-ih*0.45; if(tp > y-d/2) tp = y-d/2; if(tp+ih < y+d/2) tp = y+d/2-ih; c.drawImage(im, x-iw/2, tp, iw, ih); c.restore(); }
     else { c.fillStyle = '#FFFFFF'; c.font = '700 '+Math.round(d*0.40)+'px '+FONT; ctext(c, pr.name ? initials(pr.name) : pr.num, x, y+1); }
     c.beginPath(); c.arc(x, y, d/2-1, 0, Math.PI*2); c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 2.5; c.stroke();
   }

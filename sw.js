@@ -1,5 +1,5 @@
 // Кэширует файлы приложения, чтобы оно открывалось в зале без интернета.
-const CACHE = 'tablo-v44';
+const CACHE = 'tablo-v46';
 const ASSETS = [
   "./",
   "index.html",
