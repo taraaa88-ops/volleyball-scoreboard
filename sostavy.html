@@ -1,0 +1,19 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Составы команд</title>
+<style>body{font:16px system-ui,sans-serif;margin:0;padding:20px;max-width:560px;background:#EEF1FA;color:#0A101E}h1{font-size:22px}li{margin:4px 0}.ok{color:#0a7a45;font-weight:600}a{color:#17306E}</style></head><body>
+<h1>Составы команд</h1><p id="st">Записываю…</p><ul id="ls"></ul><p><a href="simple.html">К простой странице</a> · <a href="index.html">К полному приложению</a></p>
+<script>
+var DATA = {"МВК": "Андросенко С., Балашов Н., Веселовский А., Ишбулатов Л., Ларин А., Леваднев А., Маслов Г., Мельников В., Севастеев И., Смирнов И., Эйснер Д.", "REMIX": "Батура Т., Васильева А., Запорощенко Т., Кравцова М., Леваднева А., Малахова И., Павлова М., Шатрова К.", "ПАНТЕОН": "Брагин В., Гуральник Р., Коптин Д., Ложенко П., Лукоянов В., Мартинович Н., Михайлов И., Петрова М., Садиков П., Сечкин В., Узор Д.", "Синергия": "Глазунова А., Добровольская Е., Ермолаева А., Зайцева А., Мельник Е., Перец А., Удовенко А., Хабарова Д.", "BASE": "Белякова А., Егорова С., Ермолина А., Журба М., Мингалеева К., Патричная А., Пучкова В., Саломатова У., Хлыбова М.", "SUPERNOVA": "Гапшина М., Иванова В., Иванова Е., Иванова Т., Лагода А., Ларина М., Судовская И., Трофимова Е., Хайкара М.", "ЗОНА \"36\"": "Егорова О., Конусова Ю., Кузнецова А., Левераш О., Ольшевская Ю., Петрова М., Самылина Д., Сапова Е.", "EMPIRE": "Виноградов Г., Голубков В., Досалиев И., Евецкий В., Зайцев С., Иванов Д., Левченко А., Лепехов Н., Луценко А., Монахов Г."};
+var done = [];
+try{
+  var st = JSON.parse(localStorage.getItem('tablo-style-v1') || 'null'); if(!st || typeof st!=='object') st = {}; if(!st.teams || typeof st.teams!=='object') st.teams = {};
+  Object.keys(DATA).forEach(function(n){
+    var k = n.trim().toLowerCase();
+    localStorage.setItem('tablo-roster-'+k, DATA[n]);
+    if(!st.teams[k]) st.teams[k] = {}; st.teams[k].ros = DATA[n].slice(0,200);
+    done.push(n+': '+DATA[n]);
+  });
+  localStorage.setItem('tablo-style-v1', JSON.stringify(st));
+  document.getElementById('st').innerHTML = '<span class="ok">Готово, составы записаны на этом устройстве.</span> Теперь в простой странице на экране «Все готово» откройте «Игроки (по желанию)»: список уже заполнен.';
+}catch(e){ document.getElementById('st').textContent = 'Не удалось записать: '+e.message; }
+document.getElementById('ls').innerHTML = done.map(function(t){ return '<li>'+t.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</li>'; }).join('');
+</script></body></html>
