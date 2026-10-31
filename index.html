@@ -394,6 +394,14 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       <button type="button" class="btn small" data-th="light" aria-pressed="false">Светлая</button>
       <button type="button" class="btn small" data-th="club" aria-pressed="false">Клубная</button>
     </div>
+    <h3 style="margin:14px 0 4px;font-size:16px">Цвета статистики игроков</h3>
+    <div class="sw-row" id="hcRow">
+      <label class="chk" style="gap:6px"><input type="color" id="hcAtk" aria-label="Цвет атаки"><span>Атака</span></label>
+      <label class="chk" style="gap:6px"><input type="color" id="hcBlk" aria-label="Цвет блока"><span>Блок</span></label>
+      <label class="chk" style="gap:6px"><input type="color" id="hcAce" aria-label="Цвет эйса"><span>Эйс</span></label>
+      <button type="button" class="btn small" id="hcReset">Сбросить</button>
+    </div>
+    <p class="note">Цвета полосок на карточке «Игроки матча». Менять можно в любой момент, видео соберётся с новыми цветами.</p>
     <h3 style="margin:14px 0 4px;font-size:16px">Бегущая строка</h3>
     <label class="chk"><input type="checkbox" id="tkOn"><span>Показывать строку на карточках (заставка, итоги, статистика)</span></label>
     <textarea id="tkText" class="field" rows="3" maxlength="600" style="width:100%;padding:8px 10px;min-height:76px" placeholder="Каждая строка идет через точку. Например:&#10;Следующая игра в субботу в 19:00&#10;Спасибо партнеру клуба"></textarea>
@@ -501,7 +509,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
           <div class="sub-row"><label for="rsAnimN">Длина анимации</label>
             <select id="rsAnimN" class="field"><option value="3">Короткая, 0,6 с</option><option value="5">Обычная, 1 с</option><option value="8">Длинная, 1,6 с</option></select></div>
           <label class="chk"><input type="checkbox" id="rsBadges"><span>Плашки: сет-пойнт, матч-пойнт, серия очков</span></label>
-          <label class="chk"><input type="checkbox" id="rsFx"><span>Плашки событий: первое очко в сете, «до победы», сет выигран (с конфетти)</span></label>
+          <label class="chk"><input type="checkbox" id="rsFx"><span>Плашки событий: первое очко в сете, «до победы», сет выигран</span></label>
           <label class="chk"><input type="checkbox" id="rsPlt"><span>Титры игрока при очке с отметкой («№7 · 12 очков»)</span></label>
           <label class="chk"><input type="checkbox" id="rsLn"><span>Расстановка шестёрок после заставки</span></label>
           <label class="chk"><input type="checkbox" id="rsRos"><span>Стартовый состав с фото (если указан в «Оформление команд»)</span></label>
@@ -919,8 +927,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   var SUM_COL = ['#5B7FE0','#F0407F'];
   var PLATE = [['#4A6FDA','#1F3C88'], ['#FF6B9C','#D8135B']];
   /* ---------- оформление команд и бегущая строка ---------- */
-  var STK = 'tablo-style-v1', ST = {teams:{}, ticker:'', tkOn:true, theme:'dark'};
-  try{ var so = JSON.parse(localStorage.getItem(STK) || 'null'); if(so && typeof so==='object'){ ST.teams = (so.teams && typeof so.teams==='object') ? so.teams : {}; ST.ticker = String(so.ticker||'').slice(0,600); ST.tkOn = so.tkOn!==false; ST.theme = ['dark','light','club'].indexOf(so.theme)>=0 ? so.theme : 'dark'; } }catch(e){}
+  var STK = 'tablo-style-v1', ST = {teams:{}, ticker:'', tkOn:true, theme:'dark', hc:{}};
+  try{ var so = JSON.parse(localStorage.getItem(STK) || 'null'); if(so && typeof so==='object'){ ST.teams = (so.teams && typeof so.teams==='object') ? so.teams : {}; ST.ticker = String(so.ticker||'').slice(0,600); ST.tkOn = so.tkOn!==false; ST.theme = ['dark','light','club'].indexOf(so.theme)>=0 ? so.theme : 'dark'; if(so.hc && typeof so.hc==='object'){ ['atk','blk','ace'].forEach(function(k){ if(/^#[0-9a-fA-F]{6}$/.test(String(so.hc[k]||''))) ST.hc[k] = so.hc[k]; }); } } }catch(e){}
   function stSave(){ try{ localStorage.setItem(STK, JSON.stringify(ST)); }catch(e){} }
   function stKey(n){ return String(n||'').trim().toLowerCase(); }
   function stOf(n){ var k = stKey(n); return k && ST.teams.hasOwnProperty(k) ? ST.teams[k] : null; }
@@ -1000,7 +1008,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   function stripText(){ return String((S.rs && S.rs.strip) || '').trim(); }
   function stripH(){ return stripText() ? 28 : 0; }
   function winAnim(v){ return (v.badges||[]).some(function(b){ return b.k==='win'; }); }
-  function animPad(v){ return winAnim(v) ? 64 : 16; }
+  function animPad(v){ return 16; }
   function star(c, x, y, r){
     c.beginPath();
     for(var i=0;i<10;i++){ var a = -Math.PI/2+i*Math.PI/5, rad = i%2 ? r*0.45 : r; c[i?'lineTo':'moveTo'](x+Math.cos(a)*rad, y+Math.sin(a)*rad); }
@@ -1076,7 +1084,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     c.restore();
     if(wfx){
       c.save(); rr(c,0,0,W,H,10); c.clip();
-      c.fillStyle = 'rgba(255,226,122,'+anv([0.55,0.38,0.22,0.1,0.03],opts.anim,opts.n||5)+')'; c.fillRect(0,0,W,H);
+      c.fillStyle = 'rgba(255,226,122,'+anv([0.32,0.22,0.13,0.06,0.02],opts.anim,opts.n||5)+')'; c.fillRect(0,0,W,H);
       c.restore();
     }
     if(bub){
@@ -1091,10 +1099,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       c.shadowColor = 'transparent'; c.strokeStyle = '#FFFFFF'; c.lineWidth = 2; c.stroke();
       c.fillStyle = '#FFFFFF'; c.font = '700 22px '+FONT; ctext(c, '+1', bx+32, by);
       c.restore();
-    }
-    if(wfx && bub){
-      var wb = bd.filter(function(b){ return b.k==='win'; })[0];
-      confetti(c, bub.cx+curW/2, bub.cy+rowH/2, -pad+4, -pad+4, W+extraW+pad-4, H+bh+pad-4, anv([0.2,0.4,0.6,0.8,1],opts.anim,opts.n||5), wb ? wb.team : bub.i);
     }
     var nmz = (v.names || names()), py = H+12;
     bd.forEach(function(b){
@@ -1516,7 +1520,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     c.restore();
   }
   /* ---------- статистика игроков ---------- */
-  var HOW_COL = {atk:'#4FD1C5', blk:'#FFFFFF', ace:'#F2B91A'};
+  var HOW_DEF = {atk:'#34D17A', blk:'#4DA3FF', ace:'#F2B91A'};
+  function howCol(k){ return (ST.hc && ST.hc[k]) || HOW_DEF[k]; }
   function plLabel(x){ return /^\d{1,3}$/.test(x) ? '№'+x : String(x); }
   function computePlayers(){
     var nm = names(), evs = S.events, g0 = -1, pts = [];
@@ -1552,34 +1557,38 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     c.font = '600 22px '+FONT; spc(c,5); var tw = c.measureText(title).width+48;
     rr(c, cx-tw/2, top, tw, 44, 22); c.fillStyle = 'rgba(255,255,255,0.10)'; c.fill(); c.strokeStyle = 'rgba(255,255,255,0.22)'; c.lineWidth = 1.5; c.stroke();
     c.fillStyle = '#E4EAFB'; ctext(c, title, cx, top+22); spc(c,0);
-    var colW = (cw-40)/2, hy = top+92, maxTot = 1, nrows = Math.max(3, Math.min(5, d.L[0].length, 5), Math.min(5, d.L[1].length));
-    d.L.forEach(function(l){ l.slice(0,5).forEach(function(z){ if(z.o.tot>maxTot) maxTot = z.o.tot; }); });
+    var colW = (cw-40)/2, hy = top+92, maxTot = 1, rh = 56, RS = 5;
+    d.L.forEach(function(l){ l.slice(0,RS).forEach(function(z){ if(z.o.tot>maxTot) maxTot = z.o.tot; }); });
     [0,1].forEach(function(t){
       var x = x0+t*(colW+40);
       rr(c, x, hy-26, colW, 52, 14); c.fillStyle = lgrad(c, x, hy-26, x, hy+26, PLATE[t][0], PLATE[t][1]); c.fill();
       c.fillStyle = '#FFFFFF'; fitText(c, n[t], 600, 26, 14, colW-30); spc(c,2); ctext(c, n[t], x+colW/2, hy); spc(c,0);
-      var list = d.L[t].slice(0,5), ry = hy+62, rh = 58;
-      if(!list.length){ c.font = '500 18px '+FONT; c.fillStyle = '#9AA6C0'; ctext(c, 'нет отметок', x+colW/2, ry+30); }
+      var list = d.L[t].slice(0,RS), ry = hy+44, labW = (function(){ c.font = '600 23px '+FONT; var mw = 0; list.forEach(function(z){ mw = Math.max(mw, c.measureText(plLabel(z.k).toUpperCase()).width); }); return Math.round(Math.min(230, Math.max(90, mw+8))); })(), barX = x+22+labW+16, barMax = x+colW-86-barX;
+      if(!list.length){
+        rr(c, x, ry+4, colW, rh*2-8, 14); c.fillStyle = 'rgba(255,255,255,0.05)'; c.fill(); c.setLineDash([8,7]); c.strokeStyle = 'rgba(255,255,255,0.22)'; c.lineWidth = 1.5; c.stroke(); c.setLineDash([]);
+        c.font = '500 19px '+FONT; c.fillStyle = '#9AA6C0'; spc(c,1); ctext(c, 'ОТМЕТОК ПО ИГРОКАМ НЕТ', x+colW/2, ry+rh-2); spc(c,0);
+      }
       list.forEach(function(z,i){
         var y = ry+i*rh+rh/2, lab = plLabel(z.k).toUpperCase();
-        c.font = '600 24px '+FONT; c.fillStyle = '#FFFFFF'; ctext(c, lab.slice(0,8), x+6, y, 'left');
-        var bx = x+110, bmax = colW-110-60, cwid = z.o.tot/maxTot*bmax, cxp = bx;
-        var rest = z.o.tot-z.o.atk-z.o.blk-z.o.ace;
-        [['atk',z.o.atk],['blk',z.o.blk],['ace',z.o.ace],['x',rest]].forEach(function(seg){
-          if(!seg[1]) return; var w = seg[1]/z.o.tot*cwid;
-          rr(c, cxp, y-10, Math.max(w-2,2), 20, 5); c.fillStyle = seg[0]==='x' ? 'rgba(255,255,255,0.28)' : HOW_COL[seg[0]]; c.fill(); cxp += w;
+        rr(c, x, y-24, colW, 48, 14); c.fillStyle = 'rgba(255,255,255,0.07)'; c.fill();
+        c.fillStyle = '#FFFFFF'; fitText(c, lab, 600, 23, 12, labW); ctext(c, lab, x+22, y, 'left');
+        var cwid = Math.max(24, z.o.tot/maxTot*barMax), cxp = barX, rest = z.o.tot-z.o.atk-z.o.blk-z.o.ace;
+        var segs = [['atk',z.o.atk],['blk',z.o.blk],['ace',z.o.ace],['x',rest]].filter(function(q){ return q[1]>0; });
+        segs.forEach(function(seg, si){
+          var w = seg[1]/z.o.tot*cwid, ww = Math.max(w-(si<segs.length-1 ? 3 : 0), 4);
+          rr(c, cxp, y-9, ww, 18, 9); c.fillStyle = seg[0]==='x' ? 'rgba(255,255,255,0.30)' : howCol(seg[0]); c.fill(); cxp += w;
         });
-        c.font = '700 26px '+FONT; c.fillStyle = '#FFFFFF'; ctext(c, String(z.o.tot), bx+cwid+12, y, 'left');
+        c.font = '700 28px '+FONT; c.fillStyle = '#FFFFFF'; ctext(c, String(z.o.tot), x+colW-20, y+1, 'right');
       });
       var kk = d.K[t], bits = [];
       if(kk.atk) bits.push('атака '+kk.atk); if(kk.blk) bits.push('блок '+kk.blk); if(kk.ace) bits.push('эйс '+kk.ace); if(kk.err) bits.push('ошибки соп. '+kk.err);
-      c.font = '500 16px '+FONT; c.fillStyle = '#9AA6C0'; spc(c,1); ctext(c, bits.join('  ·  ').toUpperCase(), x+colW/2, ry+nrows*rh+22); spc(c,0);
+      c.font = '500 15px '+FONT; c.fillStyle = '#9AA6C0'; spc(c,1); ctext(c, bits.join('  ·  ').toUpperCase(), x+colW/2, ry+RS*rh+16); spc(c,0);
     });
     // легенда
-    var ly = hy+62+nrows*58+58, leg = [['atk','АТАКА'],['blk','БЛОК'],['ace','ЭЙС']];
+    var ly = hy+44+RS*rh+54, leg = [['atk','АТАКА'],['blk','БЛОК'],['ace','ЭЙС']];
     c.font = '500 15px '+FONT; spc(c,1.5);
     var lw = leg.map(function(l){ return c.measureText(l[1]).width+34; }), tl = lw.reduce(function(a,b){ return a+b; },0)+20*(leg.length-1), lx = cx-tl/2;
-    leg.forEach(function(l,i){ rr(c, lx, ly-7, 14, 14, 4); c.fillStyle = HOW_COL[l[0]]; c.fill(); c.fillStyle = '#C9D4F5'; ctext(c, l[1], lx+22, ly, 'left'); lx += lw[i]+20; });
+    leg.forEach(function(l,i){ rr(c, lx, ly-7, 14, 14, 4); c.fillStyle = howCol(l[0]); c.fill(); c.fillStyle = '#C9D4F5'; ctext(c, l[1], lx+22, ly, 'left'); lx += lw[i]+20; });
     spc(c,0);
     if(d.best){
       var lab = 'MVP МАТЧА   '+plLabel(d.best.k).toUpperCase()+'   ·   '+d.best.o.tot+' ОЧК.', by = ly+50;
@@ -2589,6 +2598,11 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     stSave(); $('impTxt').value = ''; render();
     say('Записано: '+r.teams.map(function(t){ return t.name+' ('+t.labels.length+')'; }).join(', ')+(r.unnamed ? '. Без названия осталось игроков: '+r.unnamed : '')+'.', 'impMsg');
   });
+  var HC_IDS = {atk:'hcAtk', blk:'hcBlk', ace:'hcAce'};
+  function hcSync(){ Object.keys(HC_IDS).forEach(function(k){ $(HC_IDS[k]).value = howCol(k); }); }
+  Object.keys(HC_IDS).forEach(function(k){ $(HC_IDS[k]).addEventListener('input', function(e){ if(!ST.hc) ST.hc = {}; ST.hc[k] = e.target.value; stSave(); render(); }); });
+  $('hcReset').addEventListener('click', function(){ ST.hc = {}; stSave(); hcSync(); render(); });
+  hcSync();
   function thSync(){ Array.prototype.forEach.call($('thRow').querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed', b.dataset.th===ST.theme ? 'true' : 'false'); }); }
   Array.prototype.forEach.call($('thRow').querySelectorAll('button'), function(b){ b.addEventListener('click', function(){ ST.theme = b.dataset.th; stSave(); thSync(); render(); }); });
   thSync();
@@ -2907,10 +2921,10 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     items.forEach(function(it,i){ it.dur = (items[i+1] ? items[i+1].sf : total) - it.sf; });
     var A = S.rs, fr = function(sec){ return Math.max(1, Math.round(sec*num/den)); };
     if(A.anim!==false){
-      var d1 = fr(0.2), out = [];
+      var d1 = fr(0.0667), out = [];
       items.forEach(function(it){
         var ev = it.f.ev;
-        var steps = ev && ev.k==='p' ? Math.min(A.animN||ANIM_N, Math.floor((it.dur-1)/d1)) : 0;
+        var steps = ev && ev.k==='p' ? Math.min((A.animN||ANIM_N)*3, Math.floor((it.dur-1)/d1)) : 0;
         if(steps>=2){
           for(var k=1;k<=steps;k++) out.push({sf:it.sf+(k-1)*d1, dur:d1, f:it.f, anim:{step:k, team:ev.team, n:steps}});
           out.push({sf:it.sf+steps*d1, dur:it.dur-steps*d1, f:it.f});
