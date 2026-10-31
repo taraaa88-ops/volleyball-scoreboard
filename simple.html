@@ -85,6 +85,11 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
 .stbox .l{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .stbox .r{text-align:left;font-weight:700;font-variant-numeric:tabular-nums}
 .stbox .m{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;text-align:center}
+.ed-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.ed-row .ed-h{grid-column:1/3;font:600 15px var(--f-body)}
+.ed-row.a .ed-h{color:var(--a)} .ed-row.b .ed-h{color:var(--b)}
+.ed-row select{min-height:44px;font-size:16px}
+.ed-set{font:700 13px var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:12px 0 2px}
 .who{border:2px solid var(--line);border-radius:14px;background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:8px}
 .who .hd{font:600 13px var(--f-body);color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
 .who .row2{display:flex;flex-wrap:wrap;gap:6px}
@@ -233,6 +238,11 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
       <div class="stbox" id="dnStats" hidden></div>
       <div class="box" id="dnPl" hidden></div>
     </div>
+    <details class="box" id="edBox" hidden>
+      <summary><b>Исправить, кто забил</b></summary>
+      <p class="muted">Выберите игрока и тип очка у нужного очка. Изменения сразу попадут в статистику и в ссылку на матч.</p>
+      <div id="edList"></div>
+    </details>
     <button class="big green" id="shareBtn" type="button">Отправить ссылку на трек игры</button>
     <p class="note-ok" id="shareMsg" role="status" aria-live="polite"></p>
     <p class="muted">Эту ссылку нужно отправить тому, кто будет монтировать видео. По ней матч сам загрузится в полной версии, ничего вводить не надо.</p>
@@ -618,6 +628,50 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
     });
     el.hidden = false;
   }
+  /* ---------- правка «кто забил» после матча ---------- */
+  function edPoints(){
+    var cur = [0,0], set = 1, out = [], ev = S.events;
+    for(var i=0;i<ev.length;i++){
+      var e = ev[i];
+      if(e.k==='p'){ cur[e.team]++; out.push({i:i, team:e.team, set:set, a:cur[0], b:cur[1]}); }
+      else if(e.k==='m'){ if(cur[e.team]>0) cur[e.team]--; for(var q=out.length-1;q>=0;q--){ if(out[q].team===e.team && out[q].set===set){ out.splice(q,1); break; } } }
+      else if(e.k==='e'){ cur = [0,0]; set++; }
+    }
+    return out;
+  }
+  function edDetailIdx(i){
+    var ev = S.events, t = ev[i].team;
+    for(var j=i+1;j<ev.length;j++){ if(ev[j].k==='q') continue; if(ev[j].k==='d' && ev[j].team===t) return j; break; }
+    return -1;
+  }
+  function edApply(i, field, val){
+    var j = edDetailIdx(i), ev = S.events;
+    if(j<0){ if(!val) return; var d = {k:'d', team:ev[i].team, wall:ev[i].wall+1}; d[field] = val; ev.splice(i+1, 0, d); }
+    else { var x = ev[j]; if(val) x[field] = val; else delete x[field]; if(!x.pl && !x.how) ev.splice(j,1); }
+    save(); renderEd(); showStats(); showPlayers();
+  }
+  function renderEd(){
+    var box = $('edBox'), list = $('edList'), R = S.rost || [[],[]], pts = edPoints();
+    var any = R[0].length+R[1].length>0 && pts.length>0;
+    box.hidden = !any; if(!any) return;
+    list.textContent = '';
+    var lastSet = 0;
+    pts.slice().reverse().forEach(function(p){
+      if(p.set!==lastSet){ lastSet = p.set; var h = document.createElement('div'); h.className = 'ed-set'; h.textContent = 'Сет '+p.set; list.appendChild(h); }
+      var j = edDetailIdx(p.i), dt = j>=0 ? S.events[j] : {};
+      var row = document.createElement('div'); row.className = 'ed-row '+(p.team===0 ? 'a' : 'b');
+      var hd = document.createElement('div'); hd.className = 'ed-h'; hd.textContent = p.a+':'+p.b+' · очко '+S.teams[p.team]; row.appendChild(hd);
+      var sh = document.createElement('select'); sh.setAttribute('aria-label','Тип очка '+p.a+':'+p.b);
+      [['','— тип —']].concat(HOWS).forEach(function(h){ var o = document.createElement('option'); o.value = h[0]; o.textContent = h[1]; sh.appendChild(o); });
+      sh.value = dt.how || ''; sh.addEventListener('change', function(){ edApply(p.i, 'how', sh.value); });
+      var sp = document.createElement('select'); sp.setAttribute('aria-label','Игрок '+p.a+':'+p.b);
+      var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '— игрок —'; sp.appendChild(o0);
+      R[p.team].forEach(function(x){ var o = document.createElement('option'); o.value = x; o.textContent = x; sp.appendChild(o); });
+      if(dt.pl && R[p.team].indexOf(dt.pl)<0){ var o1 = document.createElement('option'); o1.value = dt.pl; o1.textContent = dt.pl; sp.appendChild(o1); }
+      sp.value = dt.pl || ''; sp.addEventListener('change', function(){ edApply(p.i, 'pl', sp.value); });
+      row.appendChild(sh); row.appendChild(sp); list.appendChild(row);
+    });
+  }
   function showDone(){
     var st = replay(S.events);
     $('dnA').textContent = S.teams[0]; $('dnB').textContent = S.teams[1];
@@ -625,7 +679,7 @@ textarea{width:100%;min-height:76px;border:2px solid var(--line);border-radius:1
     chipsInto($('dnChips'), st);
     if(st.tmoAll[0]+st.tmoAll[1]>0){ var tc = document.createElement('span'); tc.className='chip'; tc.textContent='Тайм-ауты: '+S.teams[0]+' '+st.tmoAll[0]+', '+S.teams[1]+' '+st.tmoAll[1]; $('dnChips').appendChild(tc); }
     $('shareMsg').textContent = ''; $('linkBox').hidden = true;
-    showStats(); showPlayers();
+    showStats(); showPlayers(); renderEd();
     show('vDone');
   }
   function b64u(bytes){ var s = ''; for(var i=0;i<bytes.length;i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i,i+0x8000)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
