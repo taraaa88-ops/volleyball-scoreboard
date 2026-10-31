@@ -166,7 +166,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .checker canvas{display:block;max-width:100%}
 
 details.card>summary{cursor:pointer;font:600 16px var(--f-display);letter-spacing:.05em;text-transform:uppercase;list-style-position:inside;min-height:24px}
-.log-scroll{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.log-scroll{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);font-size:14px}
 th{position:sticky;top:0;background:var(--surface);color:var(--muted);font-weight:500}
@@ -462,7 +462,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     <summary>Журнал очков <span class="muted" id="logCount"></span></summary>
     <div class="log-scroll" style="margin-top:12px">
       <table>
-        <thead><tr><th>Время видео</th><th>Счет</th><th>Событие</th></tr></thead>
+        <thead><tr><th>Время видео</th><th>Счет</th><th>Событие</th><th>Кто забил</th></tr></thead>
         <tbody id="logBody"></tbody>
       </table>
     </div>
@@ -2120,19 +2120,55 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     var cs = curSpeed();
     Array.prototype.forEach.call(document.querySelectorAll('#spdRow [data-sp]'), function(b){ b.setAttribute('aria-pressed', parseFloat(b.dataset.sp)===cs ? 'true' : 'false'); });
   }
+  var edOpen = -1, HOWL = [['atk','Атака'],['blk','Блок'],['ace','Эйс'],['err','Ошибка соперника']];
+  function edDetailIdx(i){
+    var ev = S.events, t = ev[i].team;
+    for(var j=i+1;j<ev.length;j++){ if(ev[j].k==='q') continue; if(ev[j].k==='d' && ev[j].team===t) return j; break; }
+    return -1;
+  }
+  function edApply(i, field, val){
+    var j = edDetailIdx(i), ev = S.events;
+    if(j<0){ if(!val) return; var d = {k:'d', team:ev[i].team, wall:ev[i].wall+1}; d[field] = val; ev.splice(i+1, 0, d); }
+    else { var x = ev[j]; if(val) x[field] = val; else delete x[field]; if(!x.pl && !x.how) ev.splice(j,1); }
+    save(); render();
+  }
   function renderLog(){
     var f = buildFrames().all, n = names();
     $('logCount').textContent = S.events.length ? '('+S.events.length+')' : '';
     var body=$('logBody'); body.textContent='';
     for(var i=f.length-1;i>=1;i--){
-      var tr=document.createElement('tr');
-      [hms(f[i].t), f[i].v.cur[0]+' : '+f[i].v.cur[1], eventLabel(f[i].ev)].forEach(function(t){
-        var td=document.createElement('td'); td.textContent=t; tr.appendChild(td);
-      });
-      body.appendChild(tr);
+      (function(fr){
+        var tr=document.createElement('tr');
+        [hms(fr.t), fr.v.cur[0]+' : '+fr.v.cur[1], eventLabel(fr.ev)].forEach(function(t){
+          var td=document.createElement('td'); td.textContent=t; tr.appendChild(td);
+        });
+        var idx = fr.ev && fr.ev.k==='p' ? S.events.indexOf(fr.ev) : -1, tdw = document.createElement('td');
+        if(idx>=0){
+          var j = edDetailIdx(idx), dt = j>=0 ? S.events[j] : {}, bt = document.createElement('button');
+          bt.type = 'button'; bt.className = 'btn small'; bt.textContent = (dt.pl || dt.how) ? ((dt.pl ? plLabel(dt.pl) : '')+(dt.how ? ' · '+{atk:'атака',blk:'блок',ace:'эйс',err:'ошибка'}[dt.how] : '')) : 'указать';
+          bt.setAttribute('aria-label','Кто забил: изменить'); bt.addEventListener('click', function(){ edOpen = (edOpen===idx ? -1 : idx); renderLog(); });
+          tdw.appendChild(bt);
+        }
+        tr.appendChild(tdw); body.appendChild(tr);
+        if(idx>=0 && edOpen===idx){
+          var t = S.events[idx].team, nmz = fr.v.names || n, st = stOf(nmz[t]), R = st ? rosLabels(st.ros) : [], dt2 = edDetailIdx(idx)>=0 ? S.events[edDetailIdx(idx)] : {};
+          var tr2 = document.createElement('tr'), td2 = document.createElement('td'); td2.colSpan = 4;
+          var wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0';
+          var sh = document.createElement('select'); sh.className = 'field'; sh.setAttribute('aria-label','Тип очка');
+          [['','— тип —']].concat(HOWL).forEach(function(h){ var o = document.createElement('option'); o.value = h[0]; o.textContent = h[1]; sh.appendChild(o); });
+          sh.value = dt2.how || ''; sh.addEventListener('change', function(){ edApply(idx, 'how', sh.value); });
+          var sp = document.createElement('select'); sp.className = 'field'; sp.setAttribute('aria-label','Игрок');
+          var o0 = document.createElement('option'); o0.value = ''; o0.textContent = R.length ? '— игрок —' : '— игроки не указаны —'; sp.appendChild(o0);
+          R.forEach(function(x){ var o = document.createElement('option'); o.value = x; o.textContent = x; sp.appendChild(o); });
+          if(dt2.pl && R.indexOf(dt2.pl)<0){ var o1 = document.createElement('option'); o1.value = dt2.pl; o1.textContent = dt2.pl; sp.appendChild(o1); }
+          sp.value = dt2.pl || ''; sp.addEventListener('change', function(){ edApply(idx, 'pl', sp.value); });
+          var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'btn small'; ok.textContent = 'Готово'; ok.addEventListener('click', function(){ edOpen = -1; renderLog(); });
+          wrap.appendChild(sh); wrap.appendChild(sp); wrap.appendChild(ok); td2.appendChild(wrap); tr2.appendChild(td2); body.appendChild(tr2);
+        }
+      })(f[i]);
     }
     if(f.length===1){
-      var tr2=document.createElement('tr'), td2=document.createElement('td'); td2.colSpan=3; td2.className='muted'; td2.textContent='Пока нет очков'; tr2.appendChild(td2); body.appendChild(tr2);
+      var tr2=document.createElement('tr'), td2=document.createElement('td'); td2.colSpan=4; td2.className='muted'; td2.textContent='Пока нет очков'; tr2.appendChild(td2); body.appendChild(tr2);
     }
   }
   function renderClock(){
@@ -3342,7 +3378,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       if(e.k==='e' || e.k==='s') out.push({k:e.k, wall:e.wall});
       else if(e.k==='t' && tm) out.push({k:'t', team:e.team, wall:e.wall});
       else if(e.k==='q') out.push({k:'q', wall:e.wall});
-      else if(e.k==='d' && tm && (typeof e.pl==='string' || ['atk','blk','ace','err'].indexOf(e.how)>=0)){ var dd = {k:'d', team:e.team, wall:e.wall}; if(typeof e.pl==='string' && e.pl.trim()) dd.pl = e.pl.trim().slice(0,12); if(['atk','blk','ace','err'].indexOf(e.how)>=0) dd.how = e.how; out.push(dd); }
+      else if(e.k==='d' && tm && (typeof e.pl==='string' || ['atk','blk','ace','err'].indexOf(e.how)>=0)){ var dd = {k:'d', team:e.team, wall:e.wall}; if(typeof e.pl==='string' && e.pl.trim()) dd.pl = e.pl.trim().slice(0,16); if(['atk','blk','ace','err'].indexOf(e.how)>=0) dd.how = e.how; out.push(dd); }
       else if(e.k==='x' && typeof e.sp==='number' && e.sp>=0 && e.sp<=8) out.push({k:'x', sp:e.sp, wall:e.wall});
       else if(e.k==='g' && typeof e.a==='string' && typeof e.b==='string') out.push({k:'g', a:e.a.slice(0,24), b:e.b.slice(0,24), pa:String(e.pa||'').slice(0,24), pb:String(e.pb||'').slice(0,24), wall:e.wall});
       else if((e.k==='p' || e.k==='v' || e.k==='m') && tm) out.push({k:e.k, team:e.team, wall:e.wall});
@@ -3421,7 +3457,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       var e = {k:k, wall:wall}; if(k==='p' || k==='m' || k==='v' || k==='r' || k==='l' || k==='t' || k==='d') e.team = x[1]===1 ? 1 : 0;
       if(k==='r') e.d = x[3]===-1 ? -1 : 1;
       if(k==='l'){ if(!Array.isArray(x[3])) return; e.lu = x[3].map(String); }
-      if(k==='d'){ var xd = Array.isArray(x[3]) ? x[3] : []; var pl0 = String(xd[0]||'').trim().slice(0,12), hw = String(xd[1]||''); if(pl0) e.pl = pl0; if(['atk','blk','ace','err'].indexOf(hw)>=0) e.how = hw; if(!e.pl && !e.how) return; }
+      if(k==='d'){ var xd = Array.isArray(x[3]) ? x[3] : []; var pl0 = String(xd[0]||'').trim().slice(0,16), hw = String(xd[1]||''); if(pl0) e.pl = pl0; if(['atk','blk','ace','err'].indexOf(hw)>=0) e.how = hw; if(!e.pl && !e.how) return; }
       ev.push(e);
     });
     return {app:'volleyball-scoreboard', v:1, teams:[{name:String(o.t[0])},{name:String(o.t[1])}], cfg:{bestOf:c[0], setPts:c[1], decPts:c[2]}, startedAt:o.s, events:ev, offset:0, res:1};
