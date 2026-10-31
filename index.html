@@ -462,7 +462,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
     <summary>Журнал очков <span class="muted" id="logCount"></span></summary>
     <div class="log-scroll" style="margin-top:12px">
       <table>
-        <thead><tr><th>Время видео</th><th>Счет</th><th>Событие</th><th>Кто забил</th></tr></thead>
+        <thead><tr><th>Время видео</th><th>Счет</th><th>Событие</th><th>Кто забил</th><th></th></tr></thead>
         <tbody id="logBody"></tbody>
       </table>
     </div>
@@ -2149,10 +2149,22 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
           bt.setAttribute('aria-label','Кто забил: изменить'); bt.addEventListener('click', function(){ edOpen = (edOpen===idx ? -1 : idx); renderLog(); });
           tdw.appendChild(bt);
         }
-        tr.appendChild(tdw); body.appendChild(tr);
+        tr.appendChild(tdw);
+        var eidx = fr.ev ? S.events.indexOf(fr.ev) : -1, tdx = document.createElement('td');
+        if(eidx>=0){
+          var xb = document.createElement('button'); xb.type = 'button'; xb.className = 'btn small'; xb.textContent = '✕'; xb.setAttribute('aria-label','Удалить событие');
+          xb.addEventListener('click', function(){
+            if(!confirm('Удалить событие «'+eventLabel(fr.ev)+'»?')) return;
+            var k = S.events.indexOf(fr.ev); if(k<0) return;
+            var cnt = 1; if(S.events[k].k==='p' && edDetailIdx(k)>=0) cnt = 2;
+            S.events.splice(k, cnt); edOpen = -1; save(); render();
+          });
+          tdx.appendChild(xb);
+        }
+        tr.appendChild(tdx); body.appendChild(tr);
         if(idx>=0 && edOpen===idx){
           var t = S.events[idx].team, nmz = fr.v.names || n, st = stOf(nmz[t]), R = st ? rosLabels(st.ros) : [], dt2 = edDetailIdx(idx)>=0 ? S.events[edDetailIdx(idx)] : {};
-          var tr2 = document.createElement('tr'), td2 = document.createElement('td'); td2.colSpan = 4;
+          var tr2 = document.createElement('tr'), td2 = document.createElement('td'); td2.colSpan = 5;
           var wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0';
           var sh = document.createElement('select'); sh.className = 'field'; sh.setAttribute('aria-label','Тип очка');
           [['','— тип —']].concat(HOWL).forEach(function(h){ var o = document.createElement('option'); o.value = h[0]; o.textContent = h[1]; sh.appendChild(o); });
@@ -2168,7 +2180,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       })(f[i]);
     }
     if(f.length===1){
-      var tr2=document.createElement('tr'), td2=document.createElement('td'); td2.colSpan=4; td2.className='muted'; td2.textContent='Пока нет очков'; tr2.appendChild(td2); body.appendChild(tr2);
+      var tr2=document.createElement('tr'), td2=document.createElement('td'); td2.colSpan=5; td2.className='muted'; td2.textContent='Пока нет очков'; tr2.appendChild(td2); body.appendChild(tr2);
     }
   }
   function renderClock(){
