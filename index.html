@@ -261,6 +261,14 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
       <button class="btn small" type="button" data-sp="3">3×</button>
       <button class="btn small" type="button" data-sp="4">4×</button>
     </div>
+    <div class="row" id="allSpdRow" role="group" aria-label="Исправить скорость всего матча">
+      <span class="note" style="flex-basis:100%">Посчитали на обычной скорости, а видео смотрели быстрее? Весь матч был на:</span>
+      <button class="btn small" type="button" data-all="1">1×</button>
+      <button class="btn small" type="button" data-all="1.5">1,5×</button>
+      <button class="btn small" type="button" data-all="2">2×</button>
+      <button class="btn small" type="button" data-all="3">3×</button>
+      <button class="btn small" type="button" data-all="4">4×</button>
+    </div>
     <div class="row">
       <button class="btn small" id="preBtn" type="button">+30 с в начало (0 : 0)</button>
       <span class="note">Сдвиг: <output class="js-off">0 с</output></span>
@@ -2454,6 +2462,15 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border
   $('res').addEventListener('change', function(e){ S.res=parseFloat(e.target.value); save(); });
   Array.prototype.forEach.call(document.querySelectorAll('#spdRow [data-sp]'), function(b){
     b.addEventListener('click', function(){ var v = parseFloat(b.dataset.sp); if(v!==curSpeed()) push({k:'x', sp:v}); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#allSpdRow [data-all]'), function(b){
+    b.addEventListener('click', function(){
+      var v = parseFloat(b.dataset.all), t0 = S.startedAt!==null ? S.startedAt : firstScoreWall();
+      if(t0===null) return;
+      S.events = S.events.filter(function(e){ return e.k!=='x'; });
+      if(v!==1) S.events.unshift({k:'x', sp:v, wall:t0});
+      save(); render(); buzz();
+    });
   });
   $('preBtn').addEventListener('click', function(){ S.offset += 30; save(); render(); });
   Array.prototype.forEach.call(document.querySelectorAll('[data-off]'), function(b){
